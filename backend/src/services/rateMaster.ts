@@ -10,6 +10,7 @@ export interface RateMaster {
   acpRatePerSqft: number
   wpcRatePerSqft: number
   hardwareSetRate: number
+  hingeRate: number
   fastenerRatePerUnit: number
   fastenersPerMetre: number
   labourRatePerSqft: number
@@ -29,6 +30,7 @@ const DEFAULTS: RateMaster = {
   acpRatePerSqft: 110,
   wpcRatePerSqft: 95,
   hardwareSetRate: 450,
+  hingeRate: 60,
   fastenerRatePerUnit: 4,
   fastenersPerMetre: 3,
   labourRatePerSqft: 35,

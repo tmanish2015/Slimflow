@@ -11,10 +11,12 @@ import {
   updateDrawing,
   type ExtractedDimension,
   type DrawingFeature,
+  type HardwareItem,
   type PanelMaterial,
 } from '../store.js'
 import { processDrawing } from '../services/processDrawing.js'
-import { generateBom } from '../services/bom.js'
+import { generateBom, firstValueMm } from '../services/bom.js'
+import { suggestHardware } from '../services/hardware.js'
 import { getRateMaster, saveRateMaster } from '../services/rateMaster.js'
 
 // Express 4 doesn't catch rejections thrown inside an async route handler —
@@ -180,6 +182,60 @@ drawingsRouter.patch('/:id/features', asyncHandler(async (req, res) => {
   res.json(updated)
 }))
 
+const hardwarePatchSchema = z.object({
+  hardwareItems: z.array(
+    z.object({
+      id: z.string().optional(),
+      label: z.string(),
+      quantity: z.number(),
+      unitCost: z.number(),
+      notes: z.string().optional().default(''),
+    }),
+  ),
+})
+
+drawingsRouter.patch('/:id/hardware', asyncHandler(async (req, res) => {
+  const drawing = await getDrawing(req.params.id)
+  if (!drawing) {
+    res.status(404).json({ error: 'Drawing not found' })
+    return
+  }
+  const parsed = hardwarePatchSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() })
+    return
+  }
+
+  const byId = new Map((drawing.hardwareItems ?? []).map((h) => [h.id, h]))
+  const nextHardware: HardwareItem[] = parsed.data.hardwareItems.map((edit) => ({
+    id: (edit.id && byId.get(edit.id)?.id) ?? randomUUID(),
+    label: edit.label,
+    quantity: edit.quantity,
+    unitCost: edit.unitCost,
+    notes: edit.notes ?? '',
+  }))
+
+  const updated = await updateDrawing(drawing.id, { hardwareItems: nextHardware })
+  res.json(updated)
+}))
+
+drawingsRouter.post('/:id/hardware/suggest', asyncHandler(async (req, res) => {
+  const drawing = await getDrawing(req.params.id)
+  if (!drawing) {
+    res.status(404).json({ error: 'Drawing not found' })
+    return
+  }
+  const heightMm = firstValueMm(drawing.dimensions, 'height')
+  if (heightMm == null) {
+    res.status(400).json({ error: 'Confirm Height before suggesting hardware' })
+    return
+  }
+  const rates = await getRateMaster()
+  const hardwareItems = suggestHardware(heightMm, rates)
+  const updated = await updateDrawing(drawing.id, { hardwareItems })
+  res.json(updated)
+}))
+
 const panelMaterialPatchSchema = z.object({
   panelMaterial: z.enum(['glass', 'acp', 'wpc']),
 })
@@ -208,8 +264,20 @@ drawingsRouter.post('/:id/bom', asyncHandler(async (req, res) => {
   try {
     const rates = await getRateMaster()
     const panelMaterial: PanelMaterial = drawing.panelMaterial ?? 'glass'
-    const bom = generateBom(drawing.dimensions, drawing.features ?? [], panelMaterial, rates)
-    const updated = await updateDrawing(drawing.id, { bom, status: 'ready' })
+
+    // Hardware must be an explicit, reviewed list before the cost roll-up —
+    // if nobody's visited the Hardware step yet, seed it from height here so
+    // the BOM never silently falls back to a flat guessed quantity.
+    let hardwareItems = drawing.hardwareItems ?? []
+    if (hardwareItems.length === 0) {
+      const heightMm = firstValueMm(drawing.dimensions, 'height')
+      if (heightMm != null) {
+        hardwareItems = suggestHardware(heightMm, rates)
+      }
+    }
+
+    const bom = generateBom(drawing.dimensions, drawing.features ?? [], hardwareItems, panelMaterial, rates)
+    const updated = await updateDrawing(drawing.id, { bom, status: 'ready', hardwareItems })
     res.json(updated)
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Could not generate BOM' })

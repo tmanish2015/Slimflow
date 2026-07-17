@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { api, type DrawingFeature, type DrawingRecord, type ExtractedDimension, type PanelMaterial } from '@/lib/api'
+import {
+  api,
+  type DrawingFeature,
+  type DrawingRecord,
+  type ExtractedDimension,
+  type HardwareItem,
+  type PanelMaterial,
+} from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -60,6 +67,16 @@ function deriveSchematicInput(
   }
 }
 
+function emptyHardwareItem(): HardwareItem {
+  return {
+    id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    label: 'New item',
+    quantity: 1,
+    unitCost: 0,
+    notes: '',
+  }
+}
+
 function emptyFeature(): DrawingFeature {
   return {
     id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -77,9 +94,12 @@ export function ReviewPage() {
   const [drawing, setDrawing] = useState<DrawingRecord | null>(null)
   const [rows, setRows] = useState<ExtractedDimension[]>([])
   const [features, setFeatures] = useState<DrawingFeature[]>([])
+  const [hardwareItems, setHardwareItems] = useState<HardwareItem[]>([])
   const [panelMaterial, setPanelMaterial] = useState<PanelMaterial>('glass')
   const [saving, setSaving] = useState(false)
   const [savingFeatures, setSavingFeatures] = useState(false)
+  const [savingHardware, setSavingHardware] = useState(false)
+  const [suggestingHardware, setSuggestingHardware] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
   const [currency, setCurrency] = useState('INR')
 
@@ -89,6 +109,7 @@ export function ReviewPage() {
     setDrawing(d)
     setRows(d.dimensions)
     setFeatures(d.features)
+    setHardwareItems(d.hardwareItems)
     setPanelMaterial(d.panelMaterial)
   }, [id])
 
@@ -180,6 +201,43 @@ export function ReviewPage() {
     }
   }
 
+  const updateHardwareItem = (itemId: string, patch: Partial<HardwareItem>) => {
+    setHardwareItems((prev) => prev.map((h) => (h.id === itemId ? { ...h, ...patch } : h)))
+  }
+
+  const addHardwareItem = () => {
+    setHardwareItems((prev) => [...prev, emptyHardwareItem()])
+  }
+
+  const removeHardwareItem = (itemId: string) => {
+    setHardwareItems((prev) => prev.filter((h) => h.id !== itemId))
+  }
+
+  const saveHardware = async () => {
+    setSavingHardware(true)
+    try {
+      const cleaned = hardwareItems.map((h) => ({ ...h, id: h.id.startsWith('new-') ? undefined : h.id }))
+      const updated = await api.updateHardware(id, cleaned as HardwareItem[])
+      setDrawing(updated)
+      setHardwareItems(updated.hardwareItems)
+    } finally {
+      setSavingHardware(false)
+    }
+  }
+
+  const suggestHardwareList = async () => {
+    setSuggestingHardware(true)
+    try {
+      const updated = await api.suggestHardware(id)
+      setDrawing(updated)
+      setHardwareItems(updated.hardwareItems)
+    } catch (err) {
+      setGenError(err instanceof Error ? err.message : 'Failed to suggest hardware')
+    } finally {
+      setSuggestingHardware(false)
+    }
+  }
+
   const savePanelMaterial = async (next: PanelMaterial) => {
     setPanelMaterial(next)
     const updated = await api.updatePanelMaterial(id, next)
@@ -189,12 +247,14 @@ export function ReviewPage() {
   const generateBom = async () => {
     setGenError(null)
     await saveDimensions()
+    await saveHardware()
     await saveFeatures()
     try {
       const updated = await api.generateBom(id)
       setDrawing(updated)
       setRows(updated.dimensions)
       setFeatures(updated.features)
+      setHardwareItems(updated.hardwareItems)
       setPanelMaterial(updated.panelMaterial)
     } catch (err) {
       setGenError(err instanceof Error ? err.message : 'Failed to generate BOM')
@@ -346,6 +406,77 @@ export function ReviewPage() {
                 Low-confidence guesses are unchecked by default — confirm or correct each value before
                 generating a BOM.
               </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Hardware list</CardTitle>
+              <Button variant="outline" size="sm" onClick={suggestHardwareList} disabled={suggestingHardware}>
+                {suggestingHardware ? 'Suggesting…' : 'Suggest from height'}
+              </Button>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <p className="text-xs text-neutral-400">
+                Reviewed and confirmed before the cost roll-up below — quantities scale with the
+                confirmed dimensions (e.g. hinge count from height), not a flat guessed count.
+              </p>
+              {hardwareItems.length > 0 && (
+                <div className="grid grid-cols-[1fr_70px_90px_1fr_24px] gap-2 text-xs font-medium text-neutral-500">
+                  <span>Label</span>
+                  <span>Qty</span>
+                  <span>Unit cost</span>
+                  <span>Notes</span>
+                  <span />
+                </div>
+              )}
+              {hardwareItems.map((h) => (
+                <div key={h.id} className="grid grid-cols-[1fr_70px_90px_1fr_24px] items-center gap-2">
+                  <Input
+                    className="h-8 text-xs"
+                    value={h.label}
+                    onChange={(e) => updateHardwareItem(h.id, { label: e.target.value })}
+                  />
+                  <Input
+                    type="number"
+                    className="h-8 text-xs"
+                    value={h.quantity}
+                    onChange={(e) => updateHardwareItem(h.id, { quantity: Number(e.target.value) || 0 })}
+                  />
+                  <Input
+                    type="number"
+                    className="h-8 text-xs"
+                    value={h.unitCost}
+                    onChange={(e) => updateHardwareItem(h.id, { unitCost: Number(e.target.value) || 0 })}
+                  />
+                  <Input
+                    className="h-8 text-xs"
+                    value={h.notes}
+                    onChange={(e) => updateHardwareItem(h.id, { notes: e.target.value })}
+                  />
+                  <button
+                    onClick={() => removeHardwareItem(h.id)}
+                    className="text-xs text-neutral-400 hover:text-red-500"
+                    title="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <div className="mt-2 flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={addHardwareItem}>
+                  + Add item
+                </Button>
+                <Button size="sm" onClick={saveHardware} disabled={savingHardware}>
+                  {savingHardware ? 'Saving…' : 'Save'}
+                </Button>
+              </div>
+              {hardwareItems.length === 0 && (
+                <p className="text-xs text-neutral-400">
+                  Empty — click &quot;Suggest from height&quot; (needs confirmed Height) or add items
+                  manually. If left empty, Generate BOM will auto-suggest before calculating.
+                </p>
+              )}
             </CardContent>
           </Card>
 

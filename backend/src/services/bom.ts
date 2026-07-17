@@ -1,4 +1,4 @@
-import type { Bom, BomLine, DrawingFeature, ExtractedDimension, PanelMaterial } from '../store.js'
+import type { Bom, BomLine, DrawingFeature, ExtractedDimension, HardwareItem, PanelMaterial } from '../store.js'
 import { toMillimetres } from './dimensionParser.js'
 import type { RateMaster } from './rateMaster.js'
 
@@ -10,7 +10,7 @@ const PANEL_MATERIAL_INFO: Record<PanelMaterial, { category: string; item: strin
   wpc: { category: 'WPC', item: 'WPC sheet(s)', rateKey: 'wpcRatePerSqft' },
 }
 
-function firstValueMm(dims: ExtractedDimension[], kind: ExtractedDimension['kind']): number | null {
+export function firstValueMm(dims: ExtractedDimension[], kind: ExtractedDimension['kind']): number | null {
   const dim = dims.find((d) => d.kind === kind && d.confirmed && d.value != null)
   if (!dim || dim.value == null) return null
   return toMillimetres(dim.value, dim.unit)
@@ -30,6 +30,7 @@ function firstValue(dims: ExtractedDimension[], kind: ExtractedDimension['kind']
 export function generateBom(
   dimensions: ExtractedDimension[],
   features: DrawingFeature[],
+  hardwareItems: HardwareItem[],
   panelMaterial: PanelMaterial,
   rates: RateMaster,
 ): Bom {
@@ -70,10 +71,10 @@ export function generateBom(
   const panelRate = rates[panelInfo.rateKey] as number
   const panelCost = panelAreaSqft * panelRate
 
-  // Openable-panel/hardware-set count isn't detected by OCR yet, so this
-  // defaults to 1 set — always visible and editable via the rate master.
-  const hardwareQty = 1
-  const hardwareCost = hardwareQty * rates.hardwareSetRate
+  // Hardware is an explicit, itemized list (hinges, handle/lock set, etc.)
+  // reviewed before this calculation runs — see services/hardware.ts for how
+  // it gets suggested from confirmed height — rather than a flat guessed qty.
+  const hardwareCost = hardwareItems.reduce((sum, h) => sum + h.quantity * h.unitCost, 0)
 
   const fastenersQty = Math.ceil(totalProfileLengthM * rates.fastenersPerMetre)
   const fastenersCost = fastenersQty * rates.fastenerRatePerUnit
@@ -110,15 +111,15 @@ export function generateBom(
         ? `(W − 2×frame) × (H − 2×frame) = ${panelWidthM.toFixed(2)}m × ${panelHeightM.toFixed(2)}m`
         : `W × H (no frame section confirmed, using full opening)`,
     },
-    {
+    ...hardwareItems.map((h) => ({
       category: 'Hardware',
-      item: 'Handle/lock set',
-      quantity: hardwareQty,
-      unit: 'set',
-      unitCost: rates.hardwareSetRate,
-      totalCost: hardwareCost,
-      formula: 'default 1 set per unit — edit once openable-panel detection is added',
-    },
+      item: h.label,
+      quantity: h.quantity,
+      unit: 'pcs',
+      unitCost: h.unitCost,
+      totalCost: h.quantity * h.unitCost,
+      formula: h.notes || 'manually specified',
+    })),
     {
       category: 'Fasteners',
       item: 'Screws/fasteners',

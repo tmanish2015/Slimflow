@@ -41,6 +41,18 @@ export interface DrawingFeature {
   cost: number
 }
 
+// A hardware line item — quantities are either a disclosed dimension-driven
+// suggestion (e.g. hinge count from height) or manually entered/edited, never
+// a silent guess. Listing hardware explicitly, before the final cost roll-up,
+// is what lets a fabricator catch a wrong count before it's baked into price.
+export interface HardwareItem {
+  id: string
+  label: string
+  quantity: number
+  unitCost: number
+  notes: string
+}
+
 export interface BomLine {
   category: string
   item: string
@@ -77,6 +89,7 @@ export interface DrawingRecord {
   scale: { knownLabel: string; knownValueMm: number } | null
   dimensions: ExtractedDimension[]
   features: DrawingFeature[]
+  hardwareItems: HardwareItem[]
   panelMaterial: PanelMaterial
   bom: Bom | null
   createdAt: string
@@ -113,6 +126,7 @@ async function load(): Promise<DbShape> {
     for (const drawing of Object.values(cache.drawings)) {
       drawing.features ??= []
       drawing.panelMaterial ??= 'glass'
+      drawing.hardwareItems ??= []
     }
   } catch {
     cache = { drawings: {} }
@@ -144,6 +158,7 @@ export async function createDrawing(input: {
     scale: null,
     dimensions: [],
     features: [],
+    hardwareItems: [],
     panelMaterial: 'glass',
     bom: null,
     createdAt: now,

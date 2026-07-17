@@ -34,6 +34,14 @@ export interface DrawingFeature {
   cost: number
 }
 
+export interface HardwareItem {
+  id: string
+  label: string
+  quantity: number
+  unitCost: number
+  notes: string
+}
+
 export interface BomLine {
   category: string
   item: string
@@ -69,6 +77,7 @@ export interface DrawingRecord {
   objectType: string | null
   dimensions: ExtractedDimension[]
   features: DrawingFeature[]
+  hardwareItems: HardwareItem[]
   panelMaterial: PanelMaterial
   bom: Bom | null
   createdAt: string
@@ -84,6 +93,7 @@ export interface RateMaster {
   acpRatePerSqft: number
   wpcRatePerSqft: number
   hardwareSetRate: number
+  hingeRate: number
   fastenerRatePerUnit: number
   fastenersPerMetre: number
   labourRatePerSqft: number

@@ -1,4 +1,12 @@
-import type { Bom, DrawingFeature, DrawingRecord, ExtractedDimension, PanelMaterial, RateMaster } from './types'
+import type {
+  Bom,
+  DrawingFeature,
+  DrawingRecord,
+  ExtractedDimension,
+  HardwareItem,
+  PanelMaterial,
+  RateMaster,
+} from './types'
 
 const BASE = '/api'
 
@@ -36,6 +44,18 @@ export const api = {
       body: JSON.stringify({ features }),
     }).then((r) => json<DrawingRecord>(r))
   },
+  updateHardware(id: string, hardwareItems: HardwareItem[]) {
+    return fetch(`${BASE}/drawings/${id}/hardware`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hardwareItems }),
+    }).then((r) => json<DrawingRecord>(r))
+  },
+  suggestHardware(id: string) {
+    return fetch(`${BASE}/drawings/${id}/hardware/suggest`, { method: 'POST' }).then((r) =>
+      json<DrawingRecord>(r),
+    )
+  },
   updatePanelMaterial(id: string, panelMaterial: PanelMaterial) {
     return fetch(`${BASE}/drawings/${id}/panel-material`, {
       method: 'PATCH',
@@ -58,4 +78,4 @@ export const api = {
   },
 }
 
-export type { Bom, DrawingFeature, DrawingRecord, ExtractedDimension, PanelMaterial, RateMaster }
+export type { Bom, DrawingFeature, DrawingRecord, ExtractedDimension, HardwareItem, PanelMaterial, RateMaster }
