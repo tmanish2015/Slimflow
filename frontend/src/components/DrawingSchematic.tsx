@@ -5,6 +5,8 @@ export interface SchematicFeature {
   position: 'top' | 'middle' | 'bottom'
 }
 
+export type SchematicPanelMaterial = 'glass' | 'acp' | 'wpc'
+
 export interface SchematicInput {
   widthMm: number | null
   heightMm: number | null
@@ -14,6 +16,18 @@ export interface SchematicInput {
   mullionCount: number
   transomCount: number
   features: SchematicFeature[]
+  panelMaterial: SchematicPanelMaterial
+}
+
+const PANEL_FILL: Record<SchematicPanelMaterial, string> = {
+  glass: '#cfe8fa',
+  acp: '#a3a3a3',
+  wpc: '#d6b98c',
+}
+const PANEL_LABEL: Record<SchematicPanelMaterial, string> = {
+  glass: 'Glass',
+  acp: 'ACP',
+  wpc: 'WPC',
 }
 
 // Vertical fraction (0 = top, 1 = bottom) of the inner opening a manually
@@ -48,6 +62,7 @@ export function DrawingSchematic({ input }: { input: SchematicInput }) {
     mullionCount,
     transomCount,
     features,
+    panelMaterial,
   } = input
 
   if (!widthMm || !heightMm || widthMm <= 0 || heightMm <= 0) {
@@ -106,8 +121,19 @@ export function DrawingSchematic({ input }: { input: SchematicInput }) {
       <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="w-full rounded border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950">
         {/* outer frame (aluminium section) */}
         <rect x={originX} y={originY} width={drawW} height={drawH} fill="#d4d4d8" stroke="#27272a" strokeWidth={2} />
-        {/* inner glass area */}
-        <rect x={innerX} y={innerY} width={innerW} height={innerH} fill="#cfe8fa" stroke="#27272a" strokeWidth={1.5} />
+        {/* inner infill panel — color/label reflect the selected material */}
+        <rect
+          x={innerX}
+          y={innerY}
+          width={innerW}
+          height={innerH}
+          fill={PANEL_FILL[panelMaterial]}
+          stroke="#27272a"
+          strokeWidth={1.5}
+        />
+        <text x={innerX + 6} y={innerY + 14} fontSize={10} fill="#27272a" opacity={0.7}>
+          {PANEL_LABEL[panelMaterial]}
+        </text>
 
         {mullionLines.map((m, i) => (
           <line key={`mullion-${i}`} x1={m.x} y1={m.y1} x2={m.x} y2={m.y2} stroke="#27272a" strokeWidth={4} />

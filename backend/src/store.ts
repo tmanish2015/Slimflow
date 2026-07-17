@@ -63,6 +63,8 @@ export interface Bom {
 
 export type DrawingStatus = 'uploaded' | 'processing' | 'needs_review' | 'ready' | 'failed'
 
+export type PanelMaterial = 'glass' | 'acp' | 'wpc'
+
 export interface DrawingRecord {
   id: string
   originalFilename: string
@@ -75,6 +77,7 @@ export interface DrawingRecord {
   scale: { knownLabel: string; knownValueMm: number } | null
   dimensions: ExtractedDimension[]
   features: DrawingFeature[]
+  panelMaterial: PanelMaterial
   bom: Bom | null
   createdAt: string
   updatedAt: string
@@ -103,10 +106,13 @@ async function load(): Promise<DbShape> {
   try {
     const raw = await readFile(DB_FILE, 'utf-8')
     cache = JSON.parse(raw) as DbShape
-    // Records persisted before `features` was added won't have it — backfill
-    // so every consumer can rely on it always being an array, never undefined.
+    // Records persisted before `features`/`panelMaterial` existed won't have
+    // them — backfill so every consumer can rely on both always being
+    // defined (an earlier version of this same mistake, with `features`,
+    // crashed the whole process on first read — see routes/drawings.ts).
     for (const drawing of Object.values(cache.drawings)) {
       drawing.features ??= []
+      drawing.panelMaterial ??= 'glass'
     }
   } catch {
     cache = { drawings: {} }
@@ -138,6 +144,7 @@ export async function createDrawing(input: {
     scale: null,
     dimensions: [],
     features: [],
+    panelMaterial: 'glass',
     bom: null,
     createdAt: now,
     updatedAt: now,

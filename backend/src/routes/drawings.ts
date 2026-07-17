@@ -11,6 +11,7 @@ import {
   updateDrawing,
   type ExtractedDimension,
   type DrawingFeature,
+  type PanelMaterial,
 } from '../store.js'
 import { processDrawing } from '../services/processDrawing.js'
 import { generateBom } from '../services/bom.js'
@@ -179,6 +180,25 @@ drawingsRouter.patch('/:id/features', asyncHandler(async (req, res) => {
   res.json(updated)
 }))
 
+const panelMaterialPatchSchema = z.object({
+  panelMaterial: z.enum(['glass', 'acp', 'wpc']),
+})
+
+drawingsRouter.patch('/:id/panel-material', asyncHandler(async (req, res) => {
+  const drawing = await getDrawing(req.params.id)
+  if (!drawing) {
+    res.status(404).json({ error: 'Drawing not found' })
+    return
+  }
+  const parsed = panelMaterialPatchSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() })
+    return
+  }
+  const updated = await updateDrawing(drawing.id, { panelMaterial: parsed.data.panelMaterial })
+  res.json(updated)
+}))
+
 drawingsRouter.post('/:id/bom', asyncHandler(async (req, res) => {
   const drawing = await getDrawing(req.params.id)
   if (!drawing) {
@@ -187,7 +207,8 @@ drawingsRouter.post('/:id/bom', asyncHandler(async (req, res) => {
   }
   try {
     const rates = await getRateMaster()
-    const bom = generateBom(drawing.dimensions, drawing.features ?? [], rates)
+    const panelMaterial: PanelMaterial = drawing.panelMaterial ?? 'glass'
+    const bom = generateBom(drawing.dimensions, drawing.features ?? [], panelMaterial, rates)
     const updated = await updateDrawing(drawing.id, { bom, status: 'ready' })
     res.json(updated)
   } catch (err) {

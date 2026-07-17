@@ -7,6 +7,8 @@ export interface RateMaster {
   profileWeightPerMetreKg: number
   barLengthM: number
   glassRatePerSqft: number
+  acpRatePerSqft: number
+  wpcRatePerSqft: number
   hardwareSetRate: number
   fastenerRatePerUnit: number
   fastenersPerMetre: number
@@ -24,6 +26,8 @@ const DEFAULTS: RateMaster = {
   profileWeightPerMetreKg: 1.6,
   barLengthM: 6,
   glassRatePerSqft: 85,
+  acpRatePerSqft: 110,
+  wpcRatePerSqft: 95,
   hardwareSetRate: 450,
   fastenerRatePerUnit: 4,
   fastenersPerMetre: 3,

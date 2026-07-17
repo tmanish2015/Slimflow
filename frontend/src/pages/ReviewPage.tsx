@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { api, type DrawingFeature, type DrawingRecord, type ExtractedDimension } from '@/lib/api'
+import { api, type DrawingFeature, type DrawingRecord, type ExtractedDimension, type PanelMaterial } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +9,11 @@ import { DrawingSchematic, type SchematicInput } from '@/components/DrawingSchem
 import { toMillimetres } from '@/lib/units'
 
 const UNIT_OPTIONS: NonNullable<ExtractedDimension['unit']>[] = ['mm', 'cm', 'in', 'ft']
+const PANEL_MATERIAL_OPTIONS: { value: PanelMaterial; label: string }[] = [
+  { value: 'glass', label: 'Glass' },
+  { value: 'acp', label: 'ACP' },
+  { value: 'wpc', label: 'WPC' },
+]
 
 const KIND_OPTIONS: ExtractedDimension['kind'][] = [
   'width',
@@ -29,7 +34,11 @@ function formatCurrency(n: number, currency: string) {
 // Reads straight from the (possibly unconfirmed, still-being-edited) rows,
 // not just confirmed ones — this is a live preview aid, not the authoritative
 // BOM input, so it should update as the user types rather than only after Save.
-function deriveSchematicInput(rows: ExtractedDimension[], features: DrawingFeature[]): SchematicInput {
+function deriveSchematicInput(
+  rows: ExtractedDimension[],
+  features: DrawingFeature[],
+  panelMaterial: PanelMaterial,
+): SchematicInput {
   const firstMm = (kind: ExtractedDimension['kind']) => {
     const row = rows.find((r) => r.kind === kind && r.value != null)
     return row?.value != null ? toMillimetres(row.value, row.unit) : null
@@ -47,6 +56,7 @@ function deriveSchematicInput(rows: ExtractedDimension[], features: DrawingFeatu
     mullionCount: mullionRow?.value ?? 0,
     transomCount: transomRow?.value ?? 0,
     features: features.map((f) => ({ id: f.id, label: f.label, shape: f.shape, position: f.position })),
+    panelMaterial,
   }
 }
 
@@ -67,6 +77,7 @@ export function ReviewPage() {
   const [drawing, setDrawing] = useState<DrawingRecord | null>(null)
   const [rows, setRows] = useState<ExtractedDimension[]>([])
   const [features, setFeatures] = useState<DrawingFeature[]>([])
+  const [panelMaterial, setPanelMaterial] = useState<PanelMaterial>('glass')
   const [saving, setSaving] = useState(false)
   const [savingFeatures, setSavingFeatures] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
@@ -78,6 +89,7 @@ export function ReviewPage() {
     setDrawing(d)
     setRows(d.dimensions)
     setFeatures(d.features)
+    setPanelMaterial(d.panelMaterial)
   }, [id])
 
   useEffect(() => {
@@ -98,7 +110,10 @@ export function ReviewPage() {
   // Must run on every render (rows.length is defined even before `drawing`
   // loads) — placing this after the early returns below made the hook count
   // differ between the loading and loaded renders (React "Rules of Hooks" violation).
-  const schematicInput = useMemo(() => deriveSchematicInput(rows, features), [rows, features])
+  const schematicInput = useMemo(
+    () => deriveSchematicInput(rows, features, panelMaterial),
+    [rows, features, panelMaterial],
+  )
 
   if (!id) return null
   if (!drawing) return <div className="p-6 text-sm text-neutral-500">Loading…</div>
@@ -165,6 +180,12 @@ export function ReviewPage() {
     }
   }
 
+  const savePanelMaterial = async (next: PanelMaterial) => {
+    setPanelMaterial(next)
+    const updated = await api.updatePanelMaterial(id, next)
+    setDrawing(updated)
+  }
+
   const generateBom = async () => {
     setGenError(null)
     await saveDimensions()
@@ -174,6 +195,7 @@ export function ReviewPage() {
       setDrawing(updated)
       setRows(updated.dimensions)
       setFeatures(updated.features)
+      setPanelMaterial(updated.panelMaterial)
     } catch (err) {
       setGenError(err instanceof Error ? err.message : 'Failed to generate BOM')
     }
@@ -239,8 +261,22 @@ export function ReviewPage() {
       {!isProcessing && (
         <div className="grid grid-cols-1 gap-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex-row items-center justify-between">
               <CardTitle>Extracted dimensions — review &amp; confirm</CardTitle>
+              <label className="flex items-center gap-2 text-xs text-neutral-500">
+                Panel material
+                <select
+                  className="h-8 rounded border border-neutral-300 bg-white px-2 text-xs dark:border-neutral-700 dark:bg-neutral-900"
+                  value={panelMaterial}
+                  onChange={(e) => void savePanelMaterial(e.target.value as PanelMaterial)}
+                >
+                  {PANEL_MATERIAL_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               <div className="grid grid-cols-[1fr_80px_60px_70px_24px] gap-2 text-xs font-medium text-neutral-500">

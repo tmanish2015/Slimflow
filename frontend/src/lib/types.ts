@@ -56,6 +56,8 @@ export interface Bom {
 
 export type DrawingStatus = 'uploaded' | 'processing' | 'needs_review' | 'ready' | 'failed'
 
+export type PanelMaterial = 'glass' | 'acp' | 'wpc'
+
 export interface DrawingRecord {
   id: string
   originalFilename: string
@@ -67,6 +69,7 @@ export interface DrawingRecord {
   objectType: string | null
   dimensions: ExtractedDimension[]
   features: DrawingFeature[]
+  panelMaterial: PanelMaterial
   bom: Bom | null
   createdAt: string
   updatedAt: string
@@ -78,6 +81,8 @@ export interface RateMaster {
   profileWeightPerMetreKg: number
   barLengthM: number
   glassRatePerSqft: number
+  acpRatePerSqft: number
+  wpcRatePerSqft: number
   hardwareSetRate: number
   fastenerRatePerUnit: number
   fastenersPerMetre: number

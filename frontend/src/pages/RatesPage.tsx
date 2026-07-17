@@ -11,6 +11,8 @@ const FIELDS: { key: keyof RateMaster; label: string }[] = [
   { key: 'profileWeightPerMetreKg', label: 'Profile weight (kg/metre)' },
   { key: 'barLengthM', label: 'Standard bar length (m)' },
   { key: 'glassRatePerSqft', label: 'Glass rate (per sqft)' },
+  { key: 'acpRatePerSqft', label: 'ACP rate (per sqft)' },
+  { key: 'wpcRatePerSqft', label: 'WPC rate (per sqft)' },
   { key: 'hardwareSetRate', label: 'Hardware set rate' },
   { key: 'fastenerRatePerUnit', label: 'Fastener rate (per pc)' },
   { key: 'fastenersPerMetre', label: 'Fasteners per metre' },

@@ -1,8 +1,14 @@
-import type { Bom, BomLine, DrawingFeature, ExtractedDimension } from '../store.js'
+import type { Bom, BomLine, DrawingFeature, ExtractedDimension, PanelMaterial } from '../store.js'
 import { toMillimetres } from './dimensionParser.js'
 import type { RateMaster } from './rateMaster.js'
 
 const SQM_PER_SQFT = 0.092903
+
+const PANEL_MATERIAL_INFO: Record<PanelMaterial, { category: string; item: string; rateKey: keyof RateMaster }> = {
+  glass: { category: 'Glass', item: 'Glass panel(s)', rateKey: 'glassRatePerSqft' },
+  acp: { category: 'ACP', item: 'ACP sheet(s)', rateKey: 'acpRatePerSqft' },
+  wpc: { category: 'WPC', item: 'WPC sheet(s)', rateKey: 'wpcRatePerSqft' },
+}
 
 function firstValueMm(dims: ExtractedDimension[], kind: ExtractedDimension['kind']): number | null {
   const dim = dims.find((d) => d.kind === kind && d.confirmed && d.value != null)
@@ -24,6 +30,7 @@ function firstValue(dims: ExtractedDimension[], kind: ExtractedDimension['kind']
 export function generateBom(
   dimensions: ExtractedDimension[],
   features: DrawingFeature[],
+  panelMaterial: PanelMaterial,
   rates: RateMaster,
 ): Bom {
   const widthMm = firstValueMm(dimensions, 'width')
@@ -51,13 +58,17 @@ export function generateBom(
   const profileWeightKg = totalProfileLengthM * rates.profileWeightPerMetreKg
   const profileCost = profileWeightKg * rates.profileRatePerKg
 
-  // Net glass area deducts the frame section on all four sides when a frame
-  // size was confirmed; otherwise falls back to the full opening (disclosed
-  // via the line's formula string so it's clear which case applied).
-  const glassWidthM = frameMm ? Math.max(widthM - (2 * frameMm) / 1000, 0) : widthM
-  const glassHeightM = frameMm ? Math.max(heightM - (2 * frameMm) / 1000, 0) : heightM
-  const glassAreaSqft = (glassWidthM * glassHeightM) / SQM_PER_SQFT
-  const glassCost = glassAreaSqft * rates.glassRatePerSqft
+  // Net infill panel area deducts the frame section on all four sides when a
+  // frame size was confirmed; otherwise falls back to the full opening
+  // (disclosed via the line's formula string so it's clear which case
+  // applied). Same area math regardless of material — only the rate and
+  // item label change with the glass/ACP/WPC choice.
+  const panelWidthM = frameMm ? Math.max(widthM - (2 * frameMm) / 1000, 0) : widthM
+  const panelHeightM = frameMm ? Math.max(heightM - (2 * frameMm) / 1000, 0) : heightM
+  const panelAreaSqft = (panelWidthM * panelHeightM) / SQM_PER_SQFT
+  const panelInfo = PANEL_MATERIAL_INFO[panelMaterial]
+  const panelRate = rates[panelInfo.rateKey] as number
+  const panelCost = panelAreaSqft * panelRate
 
   // Openable-panel/hardware-set count isn't detected by OCR yet, so this
   // defaults to 1 set — always visible and editable via the rate master.
@@ -72,9 +83,9 @@ export function generateBom(
   // not computed, since there's no geometry to compute it from.
   const featuresCost = features.reduce((sum, f) => sum + f.cost, 0)
 
-  const materialCost = profileCost + glassCost + hardwareCost + fastenersCost + featuresCost
-  const wasteCost = ((profileCost + glassCost) * rates.wastePercent) / 100
-  const labourCost = glassAreaSqft * rates.labourRatePerSqft
+  const materialCost = profileCost + panelCost + hardwareCost + fastenersCost + featuresCost
+  const wasteCost = ((profileCost + panelCost) * rates.wastePercent) / 100
+  const labourCost = panelAreaSqft * rates.labourRatePerSqft
   const totalCost = materialCost + wasteCost + labourCost
   const sellingPrice = totalCost * (1 + rates.marginPercent / 100)
 
@@ -89,14 +100,14 @@ export function generateBom(
       formula: `perimeter 2×(W+H) + ${mullionCount} mullion(s)×H + ${transomCount} transom(s)×W = ${totalProfileLengthM.toFixed(2)}m × ${rates.profileWeightPerMetreKg}kg/m × ₹${rates.profileRatePerKg}/kg`,
     },
     {
-      category: 'Glass',
-      item: 'Glass panel(s)',
-      quantity: Number(glassAreaSqft.toFixed(2)),
+      category: panelInfo.category,
+      item: panelInfo.item,
+      quantity: Number(panelAreaSqft.toFixed(2)),
       unit: 'sqft',
-      unitCost: rates.glassRatePerSqft,
-      totalCost: glassCost,
+      unitCost: panelRate,
+      totalCost: panelCost,
       formula: frameMm
-        ? `(W − 2×frame) × (H − 2×frame) = ${glassWidthM.toFixed(2)}m × ${glassHeightM.toFixed(2)}m`
+        ? `(W − 2×frame) × (H − 2×frame) = ${panelWidthM.toFixed(2)}m × ${panelHeightM.toFixed(2)}m`
         : `W × H (no frame section confirmed, using full opening)`,
     },
     {
