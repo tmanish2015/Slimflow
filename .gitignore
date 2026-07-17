@@ -11,5 +11,6 @@ backend/*.traineddata
 backend/data/uploads/*
 backend/data/processed/*
 backend/data/*.json
+backend/data/*.sqlite
 !backend/data/uploads/.gitkeep
 !backend/data/processed/.gitkeep

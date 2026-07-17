@@ -1,4 +1,4 @@
-import { Router, type Request, type Response, type NextFunction } from 'express'
+import { Router } from 'express'
 import multer from 'multer'
 import path from 'node:path'
 import { z } from 'zod'
@@ -18,18 +18,7 @@ import { processDrawing } from '../services/processDrawing.js'
 import { generateBom, firstValueMm } from '../services/bom.js'
 import { suggestHardware } from '../services/hardware.js'
 import { getRateMaster, saveRateMaster } from '../services/rateMaster.js'
-
-// Express 4 doesn't catch rejections thrown inside an async route handler —
-// an unhandled one becomes an unhandled promise rejection, which crashes the
-// whole Node process by default (confirmed in practice: a single request to
-// the features endpoint against a pre-existing record without a `features`
-// field took the entire server down for every user). Wrapping every async
-// handler forwards the error to Express's error middleware instead.
-function asyncHandler(fn: (req: Request, res: Response) => Promise<void>) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    fn(req, res).catch(next)
-  }
-}
+import { asyncHandler } from '../asyncHandler.js'
 
 const ACCEPTED_MIME = new Set([
   'application/pdf',

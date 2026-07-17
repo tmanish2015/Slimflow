@@ -2,6 +2,10 @@ import express, { type ErrorRequestHandler } from 'express'
 import cors from 'cors'
 import { PROCESSED_DIR, UPLOAD_DIR } from './store.js'
 import { drawingsRouter, rateMasterRouter } from './routes/drawings.js'
+import { configuratorRouter } from './configurator/routes.js'
+import { seedIfEmpty } from './configurator/seed.js'
+
+seedIfEmpty()
 
 const app = express()
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787
@@ -13,6 +17,7 @@ app.use('/processed', express.static(PROCESSED_DIR))
 
 app.use('/api/drawings', drawingsRouter)
 app.use('/api/rate-master', rateMasterRouter)
+app.use('/api/configurator', configuratorRouter)
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
