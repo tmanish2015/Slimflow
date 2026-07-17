@@ -1,3 +1,10 @@
+export interface SchematicFeature {
+  id: string
+  label: string
+  shape: 'arch' | 'custom'
+  position: 'top' | 'middle' | 'bottom'
+}
+
 export interface SchematicInput {
   widthMm: number | null
   heightMm: number | null
@@ -6,6 +13,15 @@ export interface SchematicInput {
   glassThicknessMm: number | null
   mullionCount: number
   transomCount: number
+  features: SchematicFeature[]
+}
+
+// Vertical fraction (0 = top, 1 = bottom) of the inner opening a manually
+// tagged feature is centered at — a rough visual placement, not a measurement.
+const POSITION_FRACTION: Record<SchematicFeature['position'], number> = {
+  top: 0.18,
+  middle: 0.5,
+  bottom: 0.82,
 }
 
 const VB_W = 480
@@ -23,8 +39,16 @@ const PAD_BOTTOM = 60
  * can't show, so they're listed as text instead of drawn.
  */
 export function DrawingSchematic({ input }: { input: SchematicInput }) {
-  const { widthMm, heightMm, frameWidthMm, frameThicknessMm, glassThicknessMm, mullionCount, transomCount } =
-    input
+  const {
+    widthMm,
+    heightMm,
+    frameWidthMm,
+    frameThicknessMm,
+    glassThicknessMm,
+    mullionCount,
+    transomCount,
+    features,
+  } = input
 
   if (!widthMm || !heightMm || widthMm <= 0 || heightMm <= 0) {
     return (
@@ -58,6 +82,22 @@ export function DrawingSchematic({ input }: { input: SchematicInput }) {
     return { y, x1: innerX, x2: innerX + innerW }
   })
 
+  const archFeatures = features.filter((f) => f.shape === 'arch')
+  const arches = archFeatures.map((f) => {
+    const fraction = POSITION_FRACTION[f.position]
+    const baseY = innerY + innerH * fraction
+    const archWidth = innerW * 0.7
+    const archHeight = Math.min(innerH * 0.16, archWidth * 0.4)
+    const cx = innerX + innerW / 2
+    const x0 = cx - archWidth / 2
+    const x1 = cx + archWidth / 2
+    // Fan/arch shape: a shallow arc between two points, drawn with an SVG
+    // elliptical-arc path — a rough visual placeholder for the manually
+    // tagged feature, not a traced measurement of the actual sketch.
+    const path = `M ${x0} ${baseY} A ${archWidth / 2} ${archHeight} 0 0 1 ${x1} ${baseY}`
+    return { ...f, path, labelX: cx, labelY: baseY - archHeight - 6 }
+  })
+
   const dimY = originY + drawH + 24
   const dimX = originX - 24
 
@@ -74,6 +114,15 @@ export function DrawingSchematic({ input }: { input: SchematicInput }) {
         ))}
         {transomLines.map((t, i) => (
           <line key={`transom-${i}`} x1={t.x1} y1={t.y} x2={t.x2} y2={t.y} stroke="#27272a" strokeWidth={4} />
+        ))}
+
+        {arches.map((a) => (
+          <g key={a.id}>
+            <path d={a.path} fill="#fef3c7" stroke="#b45309" strokeWidth={1.5} strokeDasharray="4 2" />
+            <text x={a.labelX} y={a.labelY} textAnchor="middle" fontSize={10} fill="#b45309">
+              {a.label}
+            </text>
+          </g>
         ))}
 
         {/* width dimension */}
@@ -105,6 +154,11 @@ export function DrawingSchematic({ input }: { input: SchematicInput }) {
         {glassThicknessMm && <span>Glass: {glassThicknessMm} mm</span>}
         <span>Mullions: {mullionCount}</span>
         <span>Transoms: {transomCount}</span>
+        {features
+          .filter((f) => f.shape === 'custom')
+          .map((f) => (
+            <span key={f.id}>Feature ({f.position}): {f.label}</span>
+          ))}
       </div>
     </div>
   )

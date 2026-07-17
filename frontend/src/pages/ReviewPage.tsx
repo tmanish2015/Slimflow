@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { api, type DrawingRecord, type ExtractedDimension } from '@/lib/api'
+import { api, type DrawingFeature, type DrawingRecord, type ExtractedDimension } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { DrawingSchematic, type SchematicInput } from '@/components/DrawingSchematic'
 import { toMillimetres } from '@/lib/units'
+
+const UNIT_OPTIONS: NonNullable<ExtractedDimension['unit']>[] = ['mm', 'cm', 'in', 'ft']
 
 const KIND_OPTIONS: ExtractedDimension['kind'][] = [
   'width',
@@ -27,7 +29,7 @@ function formatCurrency(n: number, currency: string) {
 // Reads straight from the (possibly unconfirmed, still-being-edited) rows,
 // not just confirmed ones — this is a live preview aid, not the authoritative
 // BOM input, so it should update as the user types rather than only after Save.
-function deriveSchematicInput(rows: ExtractedDimension[]): SchematicInput {
+function deriveSchematicInput(rows: ExtractedDimension[], features: DrawingFeature[]): SchematicInput {
   const firstMm = (kind: ExtractedDimension['kind']) => {
     const row = rows.find((r) => r.kind === kind && r.value != null)
     return row?.value != null ? toMillimetres(row.value, row.unit) : null
@@ -44,6 +46,19 @@ function deriveSchematicInput(rows: ExtractedDimension[]): SchematicInput {
     glassThicknessMm: firstMm('glass_thickness'),
     mullionCount: mullionRow?.value ?? 0,
     transomCount: transomRow?.value ?? 0,
+    features: features.map((f) => ({ id: f.id, label: f.label, shape: f.shape, position: f.position })),
+  }
+}
+
+function emptyFeature(): DrawingFeature {
+  return {
+    id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    label: 'Arched fanlight',
+    shape: 'arch',
+    position: 'middle',
+    material: '',
+    notes: '',
+    cost: 0,
   }
 }
 
@@ -51,7 +66,9 @@ export function ReviewPage() {
   const { id } = useParams<{ id: string }>()
   const [drawing, setDrawing] = useState<DrawingRecord | null>(null)
   const [rows, setRows] = useState<ExtractedDimension[]>([])
+  const [features, setFeatures] = useState<DrawingFeature[]>([])
   const [saving, setSaving] = useState(false)
+  const [savingFeatures, setSavingFeatures] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
   const [currency, setCurrency] = useState('INR')
 
@@ -60,6 +77,7 @@ export function ReviewPage() {
     const d = await api.getDrawing(id)
     setDrawing(d)
     setRows(d.dimensions)
+    setFeatures(d.features)
   }, [id])
 
   useEffect(() => {
@@ -80,7 +98,7 @@ export function ReviewPage() {
   // Must run on every render (rows.length is defined even before `drawing`
   // loads) — placing this after the early returns below made the hook count
   // differ between the loading and loaded renders (React "Rules of Hooks" violation).
-  const schematicInput = useMemo(() => deriveSchematicInput(rows), [rows])
+  const schematicInput = useMemo(() => deriveSchematicInput(rows, features), [rows, features])
 
   if (!id) return null
   if (!drawing) return <div className="p-6 text-sm text-neutral-500">Loading…</div>
@@ -123,13 +141,39 @@ export function ReviewPage() {
     }
   }
 
+  const updateFeature = (featureId: string, patch: Partial<DrawingFeature>) => {
+    setFeatures((prev) => prev.map((f) => (f.id === featureId ? { ...f, ...patch } : f)))
+  }
+
+  const addFeature = () => {
+    setFeatures((prev) => [...prev, emptyFeature()])
+  }
+
+  const removeFeature = (featureId: string) => {
+    setFeatures((prev) => prev.filter((f) => f.id !== featureId))
+  }
+
+  const saveFeatures = async () => {
+    setSavingFeatures(true)
+    try {
+      const cleaned = features.map((f) => ({ ...f, id: f.id.startsWith('new-') ? undefined : f.id }))
+      const updated = await api.updateFeatures(id, cleaned as DrawingFeature[])
+      setDrawing(updated)
+      setFeatures(updated.features)
+    } finally {
+      setSavingFeatures(false)
+    }
+  }
+
   const generateBom = async () => {
     setGenError(null)
     await saveDimensions()
+    await saveFeatures()
     try {
       const updated = await api.generateBom(id)
       setDrawing(updated)
       setRows(updated.dimensions)
+      setFeatures(updated.features)
     } catch (err) {
       setGenError(err instanceof Error ? err.message : 'Failed to generate BOM')
     }
@@ -234,9 +278,11 @@ export function ReviewPage() {
                       updateRow(row.id, { unit: (e.target.value || null) as ExtractedDimension['unit'] })
                     }
                   >
-                    <option value="mm">mm</option>
-                    <option value="cm">cm</option>
-                    <option value="in">in</option>
+                    {UNIT_OPTIONS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
                   </select>
                   <input
                     type="checkbox"
@@ -264,6 +310,84 @@ export function ReviewPage() {
                 Low-confidence guesses are unchecked by default — confirm or correct each value before
                 generating a BOM.
               </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Special features (manually tagged)</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <p className="text-xs text-neutral-400">
+                For design elements the automatic pipeline can&apos;t detect — e.g. an arched fanlight
+                from a hand sketch. Not auto-detected: add it here with its own cost, and it&apos;ll show
+                up as a BOM line and an overlay on the schematic above.
+              </p>
+              {features.length > 0 && (
+                <div className="grid grid-cols-[1fr_90px_90px_1fr_80px_24px] gap-2 text-xs font-medium text-neutral-500">
+                  <span>Label</span>
+                  <span>Shape</span>
+                  <span>Position</span>
+                  <span>Material / notes</span>
+                  <span>Cost</span>
+                  <span />
+                </div>
+              )}
+              {features.map((f) => (
+                <div key={f.id} className="grid grid-cols-[1fr_90px_90px_1fr_80px_24px] items-center gap-2">
+                  <Input
+                    className="h-8 text-xs"
+                    value={f.label}
+                    onChange={(e) => updateFeature(f.id, { label: e.target.value })}
+                  />
+                  <select
+                    className="h-8 rounded border border-neutral-300 bg-white px-1 text-xs dark:border-neutral-700 dark:bg-neutral-900"
+                    value={f.shape}
+                    onChange={(e) => updateFeature(f.id, { shape: e.target.value as DrawingFeature['shape'] })}
+                  >
+                    <option value="arch">arch</option>
+                    <option value="custom">custom</option>
+                  </select>
+                  <select
+                    className="h-8 rounded border border-neutral-300 bg-white px-1 text-xs dark:border-neutral-700 dark:bg-neutral-900"
+                    value={f.position}
+                    onChange={(e) =>
+                      updateFeature(f.id, { position: e.target.value as DrawingFeature['position'] })
+                    }
+                  >
+                    <option value="top">top</option>
+                    <option value="middle">middle</option>
+                    <option value="bottom">bottom</option>
+                  </select>
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="e.g. frosted glass"
+                    value={f.material}
+                    onChange={(e) => updateFeature(f.id, { material: e.target.value })}
+                  />
+                  <Input
+                    type="number"
+                    className="h-8 text-xs"
+                    value={f.cost}
+                    onChange={(e) => updateFeature(f.id, { cost: Number(e.target.value) || 0 })}
+                  />
+                  <button
+                    onClick={() => removeFeature(f.id)}
+                    className="text-xs text-neutral-400 hover:text-red-500"
+                    title="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <div className="mt-2 flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={addFeature}>
+                  + Add feature
+                </Button>
+                <Button size="sm" onClick={saveFeatures} disabled={savingFeatures}>
+                  {savingFeatures ? 'Saving…' : 'Save'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

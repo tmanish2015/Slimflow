@@ -15,11 +15,23 @@ export interface ExtractedDimension {
   label: string
   rawText: string
   value: number | null
-  unit: 'mm' | 'cm' | 'in' | null
+  unit: 'mm' | 'cm' | 'in' | 'ft' | null
   confidence: number
   source: 'vector-pdf' | 'ocr'
   bbox: { x: number; y: number; width: number; height: number } | null
   confirmed: boolean
+}
+
+// Manually-tagged design element the automatic pipeline can't detect (e.g.
+// an arched fanlight from a hand sketch) — human-entered, not inferred.
+export interface DrawingFeature {
+  id: string
+  label: string
+  shape: 'arch' | 'custom'
+  position: 'top' | 'middle' | 'bottom'
+  material: string
+  notes: string
+  cost: number
 }
 
 export interface BomLine {
@@ -54,6 +66,7 @@ export interface DrawingRecord {
   errorMessage: string | null
   objectType: string | null
   dimensions: ExtractedDimension[]
+  features: DrawingFeature[]
   bom: Bom | null
   createdAt: string
   updatedAt: string

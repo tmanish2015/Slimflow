@@ -16,7 +16,7 @@ interface Line {
   tokens: RawToken[]
 }
 
-const UNIT_RE = /\b(mm|cm|m|in|inch|inches)\b/gi
+const UNIT_RE = /\b(mm|cm|m|in|inch|inches|ft|feet|foot)\b/gi
 const PLAIN_NUMBER_RE = /(\d[\d,]{0,6})(?:\.\d+)?/g
 const FRAME_XY_RE = /(\d{1,4})\s*[xX×]\s*(\d{1,4})/
 const RATIO_RE = /\b(\d{1,3})\s*:\s*(\d{1,4})\b/
@@ -54,7 +54,7 @@ function groupIntoLines(tokens: RawToken[]): Line[] {
   return lines
 }
 
-function unitFromText(text: string): 'mm' | 'cm' | 'in' | null {
+function unitFromText(text: string): 'mm' | 'cm' | 'in' | 'ft' | null {
   // Take the LAST unit-like word in the line: the real unit label almost
   // always trails the number ("1800 MM"), while a false hit on the word
   // "in" as a preposition ("ALL DIMENSIONS ARE IN MM") tends to precede it.
@@ -64,12 +64,14 @@ function unitFromText(text: string): 'mm' | 'cm' | 'in' | null {
   if (u === 'mm') return 'mm'
   if (u === 'cm' || u === 'm') return 'cm'
   if (u === 'in' || u.startsWith('inch')) return 'in'
+  if (u === 'ft' || u === 'feet' || u === 'foot') return 'ft'
   return null
 }
 
-export function toMillimetres(value: number, unit: 'mm' | 'cm' | 'in' | null): number {
+export function toMillimetres(value: number, unit: 'mm' | 'cm' | 'in' | 'ft' | null): number {
   if (unit === 'cm') return value * 10
   if (unit === 'in') return value * 25.4
+  if (unit === 'ft') return value * 304.8
   return value // mm or unlabeled — mm is the industry default for these drawings
 }
 
@@ -87,7 +89,7 @@ function makeDimension(
   label: string,
   rawText: string,
   value: number | null,
-  unit: 'mm' | 'cm' | 'in' | null,
+  unit: 'mm' | 'cm' | 'in' | 'ft' | null,
   confidence: number,
   source: 'vector-pdf' | 'ocr',
   tokens: RawToken[],
@@ -191,7 +193,7 @@ export function parseDimensions(tokens: RawToken[], source: 'vector-pdf' | 'ocr'
   const hasWidth = results.some((r) => r.kind === 'width')
   const hasHeight = results.some((r) => r.kind === 'height')
   if (!hasWidth || !hasHeight) {
-    const candidates: { value: number; tokens: RawToken[]; unit: 'mm' | 'cm' | 'in' | null }[] = []
+    const candidates: { value: number; tokens: RawToken[]; unit: 'mm' | 'cm' | 'in' | 'ft' | null }[] = []
     for (const line of lines) {
       if (line.tokens.some((t) => claimedTokenIds.has(t))) continue
       if (FRAME_XY_RE.test(line.text)) continue

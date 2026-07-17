@@ -1,4 +1,4 @@
-import type { Bom, BomLine, ExtractedDimension } from '../store.js'
+import type { Bom, BomLine, DrawingFeature, ExtractedDimension } from '../store.js'
 import { toMillimetres } from './dimensionParser.js'
 import type { RateMaster } from './rateMaster.js'
 
@@ -21,7 +21,11 @@ function firstValue(dims: ExtractedDimension[], kind: ExtractedDimension['kind']
  * "no simulated AI" convention: thresholds/assumptions are named in comments
  * so a fabricator can sanity-check every number.
  */
-export function generateBom(dimensions: ExtractedDimension[], rates: RateMaster): Bom {
+export function generateBom(
+  dimensions: ExtractedDimension[],
+  features: DrawingFeature[],
+  rates: RateMaster,
+): Bom {
   const widthMm = firstValueMm(dimensions, 'width')
   const heightMm = firstValueMm(dimensions, 'height')
   if (widthMm == null || heightMm == null) {
@@ -63,7 +67,12 @@ export function generateBom(dimensions: ExtractedDimension[], rates: RateMaster)
   const fastenersQty = Math.ceil(totalProfileLengthM * rates.fastenersPerMetre)
   const fastenersCost = fastenersQty * rates.fastenerRatePerUnit
 
-  const materialCost = profileCost + glassCost + hardwareCost + fastenersCost
+  // Manually-tagged design elements the automatic pipeline can't detect
+  // (e.g. an arched fanlight) — cost is whatever the user entered for it,
+  // not computed, since there's no geometry to compute it from.
+  const featuresCost = features.reduce((sum, f) => sum + f.cost, 0)
+
+  const materialCost = profileCost + glassCost + hardwareCost + fastenersCost + featuresCost
   const wasteCost = ((profileCost + glassCost) * rates.wastePercent) / 100
   const labourCost = glassAreaSqft * rates.labourRatePerSqft
   const totalCost = materialCost + wasteCost + labourCost
@@ -108,6 +117,15 @@ export function generateBom(dimensions: ExtractedDimension[], rates: RateMaster)
       totalCost: fastenersCost,
       formula: `${rates.fastenersPerMetre}/m × ${totalProfileLengthM.toFixed(2)}m profile`,
     },
+    ...features.map((f) => ({
+      category: 'Special Feature',
+      item: f.material ? `${f.label} (${f.material})` : f.label,
+      quantity: 1,
+      unit: 'unit',
+      unitCost: f.cost,
+      totalCost: f.cost,
+      formula: 'manually entered — not auto-detected from the drawing',
+    })),
   ]
 
   return {

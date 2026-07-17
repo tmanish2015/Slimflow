@@ -1,4 +1,4 @@
-import type { Bom, DrawingRecord, ExtractedDimension, RateMaster } from './types'
+import type { Bom, DrawingFeature, DrawingRecord, ExtractedDimension, RateMaster } from './types'
 
 const BASE = '/api'
 
@@ -29,6 +29,13 @@ export const api = {
       body: JSON.stringify({ dimensions }),
     }).then((r) => json<DrawingRecord>(r))
   },
+  updateFeatures(id: string, features: DrawingFeature[]) {
+    return fetch(`${BASE}/drawings/${id}/features`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ features }),
+    }).then((r) => json<DrawingRecord>(r))
+  },
   generateBom(id: string) {
     return fetch(`${BASE}/drawings/${id}/bom`, { method: 'POST' }).then((r) => json<DrawingRecord>(r))
   },
@@ -44,4 +51,4 @@ export const api = {
   },
 }
 
-export type { Bom, DrawingRecord, ExtractedDimension, RateMaster }
+export type { Bom, DrawingFeature, DrawingRecord, ExtractedDimension, RateMaster }

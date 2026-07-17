@@ -19,11 +19,26 @@ export interface ExtractedDimension {
   label: string
   rawText: string
   value: number | null
-  unit: 'mm' | 'cm' | 'in' | null
+  unit: 'mm' | 'cm' | 'in' | 'ft' | null
   confidence: number
   source: 'vector-pdf' | 'ocr'
   bbox: { x: number; y: number; width: number; height: number } | null
   confirmed: boolean
+}
+
+// A manually-tagged design element the automatic pipeline can't detect —
+// e.g. an arched fanlight in a hand sketch. Deliberately not auto-detected:
+// arbitrary curved-shape recognition from rough sketches is unreliable, so
+// this is a human-entered line rather than a guess (same "no fake AI" spirit
+// as the rest of the extraction — see feedback-tradeflow-build-conventions).
+export interface DrawingFeature {
+  id: string
+  label: string
+  shape: 'arch' | 'custom'
+  position: 'top' | 'middle' | 'bottom'
+  material: string
+  notes: string
+  cost: number
 }
 
 export interface BomLine {
@@ -59,6 +74,7 @@ export interface DrawingRecord {
   objectType: string | null
   scale: { knownLabel: string; knownValueMm: number } | null
   dimensions: ExtractedDimension[]
+  features: DrawingFeature[]
   bom: Bom | null
   createdAt: string
   updatedAt: string
@@ -87,6 +103,11 @@ async function load(): Promise<DbShape> {
   try {
     const raw = await readFile(DB_FILE, 'utf-8')
     cache = JSON.parse(raw) as DbShape
+    // Records persisted before `features` was added won't have it — backfill
+    // so every consumer can rely on it always being an array, never undefined.
+    for (const drawing of Object.values(cache.drawings)) {
+      drawing.features ??= []
+    }
   } catch {
     cache = { drawings: {} }
   }
@@ -116,6 +137,7 @@ export async function createDrawing(input: {
     objectType: null,
     scale: null,
     dimensions: [],
+    features: [],
     bom: null,
     createdAt: now,
     updatedAt: now,
