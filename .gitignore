@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.local
+
+# tesseract.js downloads its language model to cwd on first run
+backend/eng.traineddata
+backend/*.traineddata
+
+# runtime data (uploads, OCR previews, generated db/rate files)
+backend/data/uploads/*
+backend/data/processed/*
+backend/data/*.json
+!backend/data/uploads/.gitkeep
+!backend/data/processed/.gitkeep
