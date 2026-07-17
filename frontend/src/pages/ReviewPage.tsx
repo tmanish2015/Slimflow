@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api, type DrawingRecord, type ExtractedDimension } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { DrawingSchematic, type SchematicInput } from '@/components/DrawingSchematic'
+import { toMillimetres } from '@/lib/units'
 
 const KIND_OPTIONS: ExtractedDimension['kind'][] = [
   'width',
@@ -20,6 +22,29 @@ const KIND_OPTIONS: ExtractedDimension['kind'][] = [
 
 function formatCurrency(n: number, currency: string) {
   return `${currency === 'INR' ? '₹' : currency + ' '}${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+}
+
+// Reads straight from the (possibly unconfirmed, still-being-edited) rows,
+// not just confirmed ones — this is a live preview aid, not the authoritative
+// BOM input, so it should update as the user types rather than only after Save.
+function deriveSchematicInput(rows: ExtractedDimension[]): SchematicInput {
+  const firstMm = (kind: ExtractedDimension['kind']) => {
+    const row = rows.find((r) => r.kind === kind && r.value != null)
+    return row?.value != null ? toMillimetres(row.value, row.unit) : null
+  }
+  const frameRows = rows.filter((r) => r.kind === 'frame' && r.value != null)
+  const mullionRow = rows.find((r) => r.kind === 'mullion_count' && r.value != null)
+  const transomRow = rows.find((r) => r.kind === 'transom_count' && r.value != null)
+
+  return {
+    widthMm: firstMm('width'),
+    heightMm: firstMm('height'),
+    frameWidthMm: frameRows[0]?.value ?? null,
+    frameThicknessMm: frameRows[1]?.value ?? null,
+    glassThicknessMm: firstMm('glass_thickness'),
+    mullionCount: mullionRow?.value ?? 0,
+    transomCount: transomRow?.value ?? 0,
+  }
 }
 
 export function ReviewPage() {
@@ -51,6 +76,11 @@ export function ReviewPage() {
     const timer = setInterval(() => void refresh(), 1500)
     return () => clearInterval(timer)
   }, [drawing, refresh])
+
+  // Must run on every render (rows.length is defined even before `drawing`
+  // loads) — placing this after the early returns below made the hook count
+  // differ between the loading and loaded renders (React "Rules of Hooks" violation).
+  const schematicInput = useMemo(() => deriveSchematicInput(rows), [rows])
 
   if (!id) return null
   if (!drawing) return <div className="p-6 text-sm text-neutral-500">Loading…</div>
@@ -151,6 +181,19 @@ export function ReviewPage() {
             </CardContent>
           </Card>
 
+          <Card>
+            <CardHeader>
+              <CardTitle>2D schematic (scaled to entered dimensions)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DrawingSchematic input={schematicInput} />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {!isProcessing && (
+        <div className="grid grid-cols-1 gap-6">
           <Card>
             <CardHeader>
               <CardTitle>Extracted dimensions — review &amp; confirm</CardTitle>
