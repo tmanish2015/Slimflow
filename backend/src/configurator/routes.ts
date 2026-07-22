@@ -11,6 +11,7 @@ import {
   recommendHinge,
   recommendTrack,
 } from './rules.js'
+import { evaluateCompatibility, filterCompatible, type Selection } from './compatibility.js'
 import type {
   ConfigurationResult,
   DoorArchitecture,
@@ -32,6 +33,32 @@ configuratorRouter.get(
       profileSeries: db.prepare('SELECT * FROM profile_series ORDER BY name').all(),
       glassOptions: db.prepare('SELECT * FROM glass_master ORDER BY thickness_mm').all(),
     })
+  }),
+)
+
+// Whitelisted so the `table` query param can never drive an arbitrary
+// `SELECT * FROM <injected>` — these are the only master tables the
+// compatibility engine currently knows how to check.
+const COMPATIBILITY_TABLES = new Set(['lock_master', 'handle_master', 'hinge_master', 'track_master', 'connector_master'])
+
+configuratorRouter.get(
+  '/compatibility',
+  asyncHandler(async (req, res) => {
+    const table = String(req.query.table ?? '')
+    if (!COMPATIBILITY_TABLES.has(table)) {
+      res.status(400).json({ error: `Unknown or unsupported table "${table}"` })
+      return
+    }
+    const num = (v: unknown) => (v != null && v !== '' ? Number(v) : null)
+    const selection: Selection = {
+      system_types: num(req.query.systemTypeId),
+      door_architectures: num(req.query.doorArchitectureId),
+      panel_configurations: num(req.query.panelConfigurationId),
+      profile_series: num(req.query.profileSeriesId),
+      profile_finishes: num(req.query.finishId),
+      glass_master: num(req.query.glassId),
+    }
+    res.json(filterCompatible(table, selection))
   }),
 )
 
@@ -95,7 +122,25 @@ function buildConfiguration(id: string, input: z.infer<typeof createConfiguratio
 
   const track = recommendTrack(doorWeightKg, panelConfig, input.widthMm, architecture)
   const frame = recommendFrame(input.heightMm, input.widthMm, doorWeightKg)
-  const hinge = recommendHinge(architecture, doorWeightKg)
+  let hinge = recommendHinge(architecture, doorWeightKg)
+
+  // Defense in depth: the recommendation-rule tables and the compatibility
+  // engine are two separate, independently-editable data sources (same
+  // reasoning as the earlier track/frame capacity safety net) — an admin
+  // could add a hinge_recommendation_rules row that a later
+  // compatibility_rules exclusion invalidates. Never hand back a hinge the
+  // compatibility engine itself would reject.
+  const selection: Selection = {
+    system_types: input.systemTypeId,
+    door_architectures: input.doorArchitectureId,
+    panel_configurations: input.panelConfigurationId,
+    profile_series: input.profileSeriesId,
+    profile_finishes: input.finishId,
+    glass_master: input.glassId ?? null,
+  }
+  if (hinge && !evaluateCompatibility('hinge_master', hinge.id, selection).allowed) {
+    hinge = null
+  }
   const hingeQuantity = hinge ? estimateHingeQuantity(input.heightMm) : 0
 
   const now = new Date().toISOString()

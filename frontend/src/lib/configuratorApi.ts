@@ -91,6 +91,24 @@ export interface ConfigurationResult {
   updatedAt: string
 }
 
+export interface CompatibilityRow {
+  id: number
+  name: string
+  allowed: boolean
+  reasons: string[]
+  [key: string]: unknown
+}
+
+export interface CompatibilityQuery {
+  table: 'lock_master' | 'handle_master' | 'hinge_master' | 'track_master' | 'connector_master'
+  systemTypeId?: number | ''
+  doorArchitectureId?: number | ''
+  panelConfigurationId?: number | ''
+  profileSeriesId?: number | ''
+  finishId?: number | ''
+  glassId?: number | ''
+}
+
 export interface CreateConfigurationInput {
   name?: string
   systemTypeId: number
@@ -121,5 +139,16 @@ export const configuratorApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     }).then((r) => json<ConfigurationResult>(r))
+  },
+  getCompatibility(query: CompatibilityQuery) {
+    const params = new URLSearchParams()
+    params.set('table', query.table)
+    if (query.systemTypeId) params.set('systemTypeId', String(query.systemTypeId))
+    if (query.doorArchitectureId) params.set('doorArchitectureId', String(query.doorArchitectureId))
+    if (query.panelConfigurationId) params.set('panelConfigurationId', String(query.panelConfigurationId))
+    if (query.profileSeriesId) params.set('profileSeriesId', String(query.profileSeriesId))
+    if (query.finishId) params.set('finishId', String(query.finishId))
+    if (query.glassId) params.set('glassId', String(query.glassId))
+    return fetch(`${BASE}/compatibility?${params.toString()}`).then((r) => json<CompatibilityRow[]>(r))
   },
 }

@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { configuratorApi, type ConfigurationResult, type ReferenceData } from '@/lib/configuratorApi'
+import {
+  configuratorApi,
+  type CompatibilityRow,
+  type ConfigurationResult,
+  type ReferenceData,
+} from '@/lib/configuratorApi'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 
 function Select<T extends { id: number }>({
   value,
@@ -47,10 +53,26 @@ export function ConfiguratorPage() {
   const [result, setResult] = useState<ConfigurationResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [locks, setLocks] = useState<CompatibilityRow[]>([])
+  const [handles, setHandles] = useState<CompatibilityRow[]>([])
 
   useEffect(() => {
     configuratorApi.getReference().then(setReference)
   }, [])
+
+  // Live compatibility preview (Step 17) — recomputed on every relevant
+  // selection change, so incompatible hardware is visibly flagged before the
+  // user ever tries to generate a quotation with it.
+  useEffect(() => {
+    if (systemTypeId === '' && doorArchitectureId === '') {
+      setLocks([])
+      setHandles([])
+      return
+    }
+    const query = { systemTypeId, doorArchitectureId, panelConfigurationId, profileSeriesId, finishId, glassId }
+    configuratorApi.getCompatibility({ table: 'lock_master', ...query }).then(setLocks)
+    configuratorApi.getCompatibility({ table: 'handle_master', ...query }).then(setHandles)
+  }, [systemTypeId, doorArchitectureId, panelConfigurationId, profileSeriesId, finishId, glassId])
 
   if (!reference) return <div className="p-6 text-sm text-neutral-500">Loading…</div>
 
@@ -163,6 +185,50 @@ export function ConfiguratorPage() {
           </label>
         </CardContent>
       </Card>
+
+      {(locks.length > 0 || handles.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Compatible hardware (live, Step 17)</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <div className="mb-1 text-xs font-medium text-neutral-500">Locks</div>
+              <div className="flex flex-col gap-1">
+                {locks.map((l) => (
+                  <div key={l.id} className="flex items-center justify-between gap-2 text-sm">
+                    <span className={l.allowed ? '' : 'text-neutral-400 line-through'}>{l.name}</span>
+                    {l.allowed ? (
+                      <Badge tone="green">allowed</Badge>
+                    ) : (
+                      <span className="text-xs text-red-500" title={l.reasons.join('; ')}>
+                        {l.reasons[0]}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="mb-1 text-xs font-medium text-neutral-500">Handles</div>
+              <div className="flex flex-col gap-1">
+                {handles.map((h) => (
+                  <div key={h.id} className="flex items-center justify-between gap-2 text-sm">
+                    <span className={h.allowed ? '' : 'text-neutral-400 line-through'}>{h.name}</span>
+                    {h.allowed ? (
+                      <Badge tone="green">allowed</Badge>
+                    ) : (
+                      <span className="text-xs text-red-500" title={h.reasons.join('; ')}>
+                        {h.reasons[0]}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex items-center gap-3">
         <Button onClick={submit} disabled={!canSubmit || submitting}>

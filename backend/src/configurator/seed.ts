@@ -8,7 +8,15 @@ import { db } from './db.js'
  */
 export function seedIfEmpty() {
   const count = db.prepare('SELECT COUNT(*) as n FROM system_types').get() as { n: number }
-  if (count.n > 0) return
+  if (count.n > 0) {
+    // Master data already seeded in an earlier run, but compatibility_rules
+    // was added later — seed it independently so an existing dev DB (or any
+    // deployment that already ran the base seed) still gets it, without
+    // re-running (and duplicating) everything else.
+    const ruleCount = db.prepare('SELECT COUNT(*) as n FROM compatibility_rules').get() as { n: number }
+    if (ruleCount.n === 0) seedCompatibilityRules()
+    return
+  }
 
   const insertMany = (sql: string, rows: unknown[][]) => {
     const stmt = db.prepare(sql)
@@ -259,5 +267,79 @@ export function seedIfEmpty() {
       [4, 0, null, 1, 1], // Bi-Fold -> Normal
       [6, 0, null, 2, 1], // French -> Concealed
     ],
+  )
+
+  seedCompatibilityRules()
+}
+
+// --- Step 17 compatibility engine data ---
+// `requires` rows for the same subject are OR'd within one constraint_table
+// (e.g. "Mortise Lock requires door_architecture IN (Openable, French)") but
+// AND'd across different constraint_tables (e.g. a rule requiring both a
+// system_type AND a door_architecture must satisfy both). `excludes` rows
+// are absolute: any match disallows the subject outright. See
+// configurator/compatibility.ts for the evaluator.
+function seedCompatibilityRules() {
+  const idByName = (table: string, name: string): number => {
+    const row = db.prepare(`SELECT id FROM ${table} WHERE name = ?`).get(name) as { id: number } | undefined
+    if (!row) throw new Error(`Seed error: no row named "${name}" in ${table}`)
+    return row.id
+  }
+
+  const insertRule = db.prepare(
+    `INSERT INTO compatibility_rules (rule_name, subject_table, subject_id, constraint_table, constraint_id, relation)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  )
+
+  // Derive door-architecture requires-rules directly from the
+  // applicable_door_types each lock/handle was already seeded with above —
+  // one authored source (that JSON array), mechanically expanded into the
+  // generic engine's rows rather than hand-duplicated (hand-duplicating the
+  // same fact in two places is exactly the kind of drift that caused the
+  // track/frame capacity bug earlier in this project).
+  for (const masterTable of ['lock_master', 'handle_master'] as const) {
+    const rows = db.prepare(`SELECT id, name, applicable_door_types FROM ${masterTable}`).all() as {
+      id: number
+      name: string
+      applicable_door_types: string
+    }[]
+    for (const row of rows) {
+      // Shower Handle's real-world constraint is the system type (Shower
+      // Cubicle), not door architecture — expressed explicitly below instead.
+      if (row.name === 'Shower Handle') continue
+      const architectureNames = JSON.parse(row.applicable_door_types) as string[]
+      for (const archName of architectureNames) {
+        insertRule.run(
+          `${row.name} requires ${archName}`,
+          masterTable,
+          row.id,
+          'door_architectures',
+          idByName('door_architectures', archName),
+          'requires',
+        )
+      }
+    }
+  }
+
+  // Explicit spec examples that don't reduce to the door-architecture JSON above.
+  const showerHandleId = idByName('handle_master', 'Shower Handle')
+  for (const systemType of ['Shower Cubicle', 'Fixed Glass']) {
+    insertRule.run(
+      `Shower Handle requires ${systemType}`,
+      'handle_master',
+      showerHandleId,
+      'system_types',
+      idByName('system_types', systemType),
+      'requires',
+    )
+  }
+
+  insertRule.run(
+    'Pivot Hinge excludes Sliding',
+    'hinge_master',
+    idByName('hinge_master', 'Pivot Hinge'),
+    'door_architectures',
+    idByName('door_architectures', 'Sliding'),
+    'excludes',
   )
 }
