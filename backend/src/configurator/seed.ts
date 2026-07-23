@@ -17,6 +17,8 @@ export function seedIfEmpty() {
     if (ruleCount.n === 0) seedCompatibilityRules()
     const floorSpringCount = db.prepare('SELECT COUNT(*) as n FROM floor_spring_master').get() as { n: number }
     if (floorSpringCount.n === 0) seedFloorSpringsAndPricing()
+    const hardwareSetCount = db.prepare('SELECT COUNT(*) as n FROM hardware_set_master').get() as { n: number }
+    if (hardwareSetCount.n === 0) seedHardwareSets()
     return
   }
 
@@ -273,6 +275,7 @@ export function seedIfEmpty() {
 
   seedFloorSpringsAndPricing()
   seedCompatibilityRules()
+  seedHardwareSets()
 }
 
 function seedFloorSpringsAndPricing() {
@@ -299,6 +302,69 @@ function seedFloorSpringsAndPricing() {
   )
   insertRule.run(5, 0, null, 1, 1) // Pivot, default -> Floor Pivot
   insertRule.run(5, 60, null, 2, 5) // Pivot, heavy -> Hydraulic Floor Spring
+}
+
+// OEM-style bundled hardware kits (hinge+floor-spring+handle+lock priced as
+// one SKU, cheaper than picking each part separately) plus the rule bands
+// that pick one by architecture + door weight. Looked up by name rather than
+// hardcoded id so this still works if seedCompatibilityRules or an admin
+// edit ever changes row order.
+function seedHardwareSets() {
+  const idByName = (table: string, name: string): number => {
+    const row = db.prepare(`SELECT id FROM ${table} WHERE name = ?`).get(name) as { id: number } | undefined
+    if (!row) throw new Error(`Seed error: no row named "${name}" in ${table}`)
+    return row.id
+  }
+
+  const insertSet = db.prepare(
+    `INSERT INTO hardware_set_master (name, hinge_id, floor_spring_id, handle_id, lock_id, rate_per_set)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  )
+  const hingeId = (name: string) => idByName('hinge_master', name)
+  const floorSpringId = (name: string) => idByName('floor_spring_master', name)
+  const handleId = (name: string) => idByName('handle_master', name)
+  const lockId = (name: string) => idByName('lock_master', name)
+
+  insertSet.run('Sliding Economy Set', null, null, handleId('Profile Handle'), lockId('Sliding Lock'), 450)
+  insertSet.run('Sliding Premium Set', null, null, handleId('Pull Handle'), lockId('Magnetic Lock'), 850)
+  insertSet.run(
+    'Openable Standard Set',
+    hingeId('Concealed Hinge'),
+    null,
+    handleId('Square Handle'),
+    lockId('Cylinder Lock'),
+    700,
+  )
+  insertSet.run(
+    'Openable Heavy Duty Set',
+    hingeId('Heavy Duty Hinge'),
+    null,
+    handleId('Square Handle'),
+    lockId('Dead Lock'),
+    1400,
+  )
+  insertSet.run(
+    'Pivot Door Set',
+    null,
+    floorSpringId('Floor Pivot'),
+    handleId('D Handle'),
+    lockId('Glass Door Lock'),
+    1600,
+  )
+
+  const insertRule = db.prepare(
+    `INSERT INTO hardware_set_recommendation_rules
+      (door_architecture_id, profile_series_id, min_door_weight_kg, max_door_weight_kg, recommended_hardware_set_id, priority)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  )
+  const archId = (name: string) => idByName('door_architectures', name)
+  const setId = (name: string) => idByName('hardware_set_master', name)
+
+  insertRule.run(archId('Sliding'), null, 0, 40, setId('Sliding Economy Set'), 1)
+  insertRule.run(archId('Sliding'), null, 40, null, setId('Sliding Premium Set'), 5)
+  insertRule.run(archId('Openable'), null, 0, 40, setId('Openable Standard Set'), 1)
+  insertRule.run(archId('Openable'), null, 40, null, setId('Openable Heavy Duty Set'), 5)
+  insertRule.run(archId('Pivot'), null, 0, null, setId('Pivot Door Set'), 1)
 }
 
 // --- Step 17 compatibility engine data ---

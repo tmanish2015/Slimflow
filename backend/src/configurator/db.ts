@@ -52,6 +52,7 @@ if (addedTrackFlag || addedHingesFlag) {
 addColumnIfMissing('configurations', 'recommended_floor_spring_id', 'INTEGER REFERENCES floor_spring_master(id)')
 addColumnIfMissing('configurations', 'recommended_handle_id', 'INTEGER REFERENCES handle_master(id)')
 addColumnIfMissing('configurations', 'recommended_lock_id', 'INTEGER REFERENCES lock_master(id)')
+addColumnIfMissing('configurations', 'recommended_hardware_set_id', 'INTEGER REFERENCES hardware_set_master(id)')
 addColumnIfMissing('configurations', 'material_cost', 'REAL')
 addColumnIfMissing('configurations', 'waste_cost', 'REAL')
 addColumnIfMissing('configurations', 'total_cost', 'REAL')

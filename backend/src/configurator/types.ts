@@ -136,6 +136,16 @@ export interface AccessoryMaster {
   rate: number
 }
 
+export interface HardwareSetMaster {
+  id: number
+  name: string
+  hinge_id: number | null
+  floor_spring_id: number | null
+  handle_id: number
+  lock_id: number
+  rate_per_set: number
+}
+
 export interface PricingRules {
   id: number
   waste_percent: number
@@ -181,6 +191,7 @@ export interface ConfigurationResult {
   recommendedFloorSpring: FloorSpringMaster | null
   recommendedHandle: HandleMaster | null
   recommendedLock: LockMaster | null
+  recommendedHardwareSet: HardwareSetMaster | null
   bomLines: ConfigurationBomLine[]
   materialCost: number
   wasteCost: number

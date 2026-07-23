@@ -26,11 +26,13 @@ const ADMIN_TABLES = [
   'glass_master',
   'accessory_master',
   'floor_spring_master',
+  'hardware_set_master',
   'pricing_rules',
   'track_recommendation_rules',
   'frame_recommendation_rules',
   'hinge_recommendation_rules',
   'floor_spring_recommendation_rules',
+  'hardware_set_recommendation_rules',
   'compatibility_rules',
 ]
 const ADMIN_TABLE_SET = new Set(ADMIN_TABLES)

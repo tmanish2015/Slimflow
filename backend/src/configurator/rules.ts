@@ -6,6 +6,7 @@ import type {
   FloorSpringMaster,
   FrameMaster,
   HandleMaster,
+  HardwareSetMaster,
   HingeMaster,
   LockMaster,
   PanelConfiguration,
@@ -244,6 +245,38 @@ function recommendCheapestCompatible<T extends { id: number; rate_per_unit: numb
     if (evaluateCompatibility(table, row.id, selection).allowed) return row
   }
   return null
+}
+
+/**
+ * Hardware sets — OEM catalogs price hinge+lock+handle+floor-spring as one
+ * bundled SKU rather than four separate line items. Matched the same way as
+ * every other recommendation table (threshold band, highest priority wins),
+ * keyed by architecture + series + door weight. Callers must still run each
+ * of the set's non-null component ids through the Step 17 compatibility
+ * engine before trusting it (same capacity-safety-net reasoning as
+ * recommendHinge/recommendFloorSpring above) — this function only resolves
+ * the rule match, it doesn't validate compatibility itself.
+ */
+export function recommendHardwareSet(
+  architecture: DoorArchitecture,
+  profileSeriesId: number,
+  doorWeightKg: number,
+): HardwareSetMaster | null {
+  const rule = db
+    .prepare(
+      `SELECT * FROM hardware_set_recommendation_rules
+       WHERE (door_architecture_id IS NULL OR door_architecture_id = ?)
+         AND (profile_series_id IS NULL OR profile_series_id = ?)
+         AND min_door_weight_kg <= ? AND (max_door_weight_kg IS NULL OR max_door_weight_kg >= ?)
+       ORDER BY priority DESC LIMIT 1`,
+    )
+    .get(architecture.id, profileSeriesId, doorWeightKg, doorWeightKg) as
+    | { recommended_hardware_set_id: number }
+    | undefined
+  if (!rule) return null
+  return db
+    .prepare('SELECT * FROM hardware_set_master WHERE id = ?')
+    .get(rule.recommended_hardware_set_id) as unknown as HardwareSetMaster
 }
 
 export function recommendHandle(selection: Selection): HandleMaster | null {

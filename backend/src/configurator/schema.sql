@@ -166,6 +166,34 @@ CREATE TABLE IF NOT EXISTS floor_spring_master (
   rate_per_unit REAL NOT NULL
 );
 
+-- OEM catalogs (Schüco/Reynaers/Häfele) sell hardware as a pre-bundled kit
+-- priced as one SKU, not four separate line items — hinge_id/floor_spring_id
+-- are nullable because a Sliding-door set has neither (it uses track rollers),
+-- while an Openable/Pivot set has one or the other, never both.
+CREATE TABLE IF NOT EXISTS hardware_set_master (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT UNIQUE NOT NULL,
+  hinge_id INTEGER REFERENCES hinge_master(id),
+  floor_spring_id INTEGER REFERENCES floor_spring_master(id),
+  handle_id INTEGER NOT NULL REFERENCES handle_master(id),
+  lock_id INTEGER NOT NULL REFERENCES lock_master(id),
+  rate_per_set REAL NOT NULL
+);
+
+-- Same threshold-band-by-priority shape as the other recommendation rule
+-- tables. door_architecture_id/profile_series_id are nullable so a rule can
+-- be as broad ("any Sliding door") or as narrow ("Sliding + this series
+-- only") as an admin needs, without a code change.
+CREATE TABLE IF NOT EXISTS hardware_set_recommendation_rules (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  door_architecture_id INTEGER REFERENCES door_architectures(id),
+  profile_series_id INTEGER REFERENCES profile_series(id),
+  min_door_weight_kg REAL NOT NULL DEFAULT 0,
+  max_door_weight_kg REAL,
+  recommended_hardware_set_id INTEGER NOT NULL REFERENCES hardware_set_master(id),
+  priority INTEGER NOT NULL DEFAULT 0
+);
+
 -- Global waste/margin applied in the BOM roll-up (Step 16) — a single
 -- editable row rather than a hardcoded constant, same "no fake AI, disclosed
 -- formula" convention as the drawing-recognition BOM's rate master.
@@ -251,6 +279,7 @@ CREATE TABLE IF NOT EXISTS configurations (
   recommended_floor_spring_id INTEGER REFERENCES floor_spring_master(id),
   recommended_handle_id INTEGER REFERENCES handle_master(id),
   recommended_lock_id INTEGER REFERENCES lock_master(id),
+  recommended_hardware_set_id INTEGER REFERENCES hardware_set_master(id),
   material_cost REAL,
   waste_cost REAL,
   total_cost REAL,

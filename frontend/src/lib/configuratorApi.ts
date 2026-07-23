@@ -100,6 +100,7 @@ export interface ConfigurationResult {
   recommendedFloorSpring: MasterRow | null
   recommendedHandle: MasterRow | null
   recommendedLock: MasterRow | null
+  recommendedHardwareSet: MasterRow | null
   bomLines: BomLine[]
   materialCost: number
   wasteCost: number
