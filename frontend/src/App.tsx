@@ -50,11 +50,11 @@ export default function App() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b bg-card">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-          <Link to="/" className="text-sm font-semibold tracking-tight">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
+          <Link to="/" className="shrink-0 text-sm font-semibold tracking-tight">
             Slimflow
           </Link>
-          <nav className="flex items-center gap-6">
+          <nav className="flex flex-wrap items-center gap-3 sm:gap-6">
             {NAV_ITEMS.map((item) => (
               <NavLink key={item.to} {...item} />
             ))}
