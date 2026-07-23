@@ -1,9 +1,12 @@
+import { useEffect, useState } from 'react'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
+import { Moon, Sun } from 'lucide-react'
 import { UploadPage } from '~/pages/UploadPage'
 import { ReviewPage } from '~/pages/ReviewPage'
 import { RatesPage } from '~/pages/RatesPage'
 import { ConfiguratorPage } from '~/pages/ConfiguratorPage'
 import { AdminPage } from '~/pages/AdminPage'
+import { Button } from '~/components/ui/button'
 import { cn } from '~/lib/utils'
 
 const NAV_ITEMS = [
@@ -28,6 +31,21 @@ function NavLink({ to, label }: { to: string; label: string }) {
   )
 }
 
+function ThemeToggle() {
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark)
+    localStorage.setItem('theme', isDark ? 'dark' : 'light')
+  }, [isDark])
+
+  return (
+    <Button variant="ghost" size="icon" onClick={() => setIsDark((v) => !v)} aria-label="Toggle theme">
+      {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+    </Button>
+  )
+}
+
 export default function App() {
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -40,6 +58,7 @@ export default function App() {
             {NAV_ITEMS.map((item) => (
               <NavLink key={item.to} {...item} />
             ))}
+            <ThemeToggle />
           </nav>
         </div>
       </header>

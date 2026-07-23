@@ -7,8 +7,11 @@
     <title>Slimflow Drawing Recognition Engine</title>
     <script>
       // shadcn's theme is class-based (.dark), not media-query-based — set it
-      // before paint from system preference to avoid a light-mode flash.
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      // before paint to avoid a flash. A saved user choice (from the toggle
+      // in App.tsx) wins over system preference; otherwise fall back to it.
+      const savedTheme = localStorage.getItem('theme')
+      const wantsDark = savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
+      if (wantsDark) {
         document.documentElement.classList.add('dark')
       }
     </script>
