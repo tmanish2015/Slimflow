@@ -21,10 +21,16 @@ export interface PanelConfiguration {
   is_heavy_duty: number
 }
 
+export interface FinishPriceGroup {
+  id: number
+  name: string
+  multiplier: number
+}
+
 export interface ProfileFinish {
   id: number
   name: string
-  price_multiplier: number
+  group_id: number
   swatch_hex: string
 }
 
@@ -129,11 +135,30 @@ export interface TapeMaster {
   rate_per_sqft: number
 }
 
+export interface GlassBeadMaster {
+  id: number
+  name: string
+  min_thickness_mm: number
+  max_thickness_mm: number | null
+  weight_per_metre_kg: number
+  rate_per_metre: number
+}
+
 export interface AccessoryMaster {
   id: number
   name: string
   unit: string
   rate: number
+}
+
+export interface HardwareSetMaster {
+  id: number
+  name: string
+  hinge_id: number | null
+  floor_spring_id: number | null
+  handle_id: number
+  lock_id: number
+  rate_per_set: number
 }
 
 export interface PricingRules {
@@ -181,6 +206,7 @@ export interface ConfigurationResult {
   recommendedFloorSpring: FloorSpringMaster | null
   recommendedHandle: HandleMaster | null
   recommendedLock: LockMaster | null
+  recommendedHardwareSet: HardwareSetMaster | null
   bomLines: ConfigurationBomLine[]
   materialCost: number
   wasteCost: number

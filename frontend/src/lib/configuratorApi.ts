@@ -26,7 +26,7 @@ export interface PanelConfiguration {
 export interface ProfileFinish {
   id: number
   name: string
-  price_multiplier: number
+  group_id: number
   swatch_hex: string
 }
 
@@ -100,6 +100,7 @@ export interface ConfigurationResult {
   recommendedFloorSpring: MasterRow | null
   recommendedHandle: MasterRow | null
   recommendedLock: MasterRow | null
+  recommendedHardwareSet: MasterRow | null
   bomLines: BomLine[]
   materialCost: number
   wasteCost: number

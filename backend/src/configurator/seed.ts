@@ -17,6 +17,16 @@ export function seedIfEmpty() {
     if (ruleCount.n === 0) seedCompatibilityRules()
     const floorSpringCount = db.prepare('SELECT COUNT(*) as n FROM floor_spring_master').get() as { n: number }
     if (floorSpringCount.n === 0) seedFloorSpringsAndPricing()
+    const hardwareSetCount = db.prepare('SELECT COUNT(*) as n FROM hardware_set_master').get() as { n: number }
+    if (hardwareSetCount.n === 0) seedHardwareSets()
+    const groupCount = db.prepare('SELECT COUNT(*) as n FROM finish_price_groups').get() as { n: number }
+    if (groupCount.n === 0) migrateFinishesToPriceGroups()
+    const seriesRuleCount = db
+      .prepare("SELECT COUNT(*) as n FROM compatibility_rules WHERE constraint_table = 'profile_series'")
+      .get() as { n: number }
+    if (seriesRuleCount.n === 0) seedSeriesCompatibilityRules()
+    const beadCount = db.prepare('SELECT COUNT(*) as n FROM glass_bead_master').get() as { n: number }
+    if (beadCount.n === 0) seedGlassBeads()
     return
   }
 
@@ -72,16 +82,29 @@ export function seedIfEmpty() {
     ],
   )
 
-  insertMany('INSERT INTO profile_finishes (name, price_multiplier, swatch_hex) VALUES (?, ?, ?)', [
-    ['Black', 1.0, '#1a1a1a'],
-    ['Brush Gold', 1.15, '#b08d57'],
-    ['Rose Gold', 1.15, '#b76e79'],
-    ['Grey', 1.0, '#808080'],
-    ['Champagne', 1.1, '#d4b896'],
-    ['Silver', 1.0, '#c0c0c0'],
-    ['White', 1.0, '#ffffff'],
-    ['Wood Finish', 1.25, '#8b5a2b'],
-    ['Custom RAL', 1.2, '#888888'],
+  // RAL colours are priced by tier, not per-swatch — same multipliers as
+  // before, just grouped so an admin can reprice a whole tier (e.g. "all
+  // metallics") in one edit instead of hunting down every matching finish.
+  insertMany('INSERT INTO finish_price_groups (name, multiplier) VALUES (?, ?)', [
+    ['Standard RAL', 1.0],
+    ['Designer RAL', 1.1],
+    ['Metallic RAL', 1.15],
+    ['Bespoke RAL', 1.2],
+    ['Textured/Wood RAL', 1.25],
+  ])
+  const groupId = (name: string): number =>
+    (db.prepare('SELECT id FROM finish_price_groups WHERE name = ?').get(name) as { id: number }).id
+
+  insertMany('INSERT INTO profile_finishes (name, group_id, swatch_hex) VALUES (?, ?, ?)', [
+    ['Black', groupId('Standard RAL'), '#1a1a1a'],
+    ['Brush Gold', groupId('Metallic RAL'), '#b08d57'],
+    ['Rose Gold', groupId('Metallic RAL'), '#b76e79'],
+    ['Grey', groupId('Standard RAL'), '#808080'],
+    ['Champagne', groupId('Designer RAL'), '#d4b896'],
+    ['Silver', groupId('Standard RAL'), '#c0c0c0'],
+    ['White', groupId('Standard RAL'), '#ffffff'],
+    ['Wood Finish', groupId('Textured/Wood RAL'), '#8b5a2b'],
+    ['Custom RAL', groupId('Bespoke RAL'), '#888888'],
   ])
 
   insertMany('INSERT INTO profile_series (name, system_type_id, description) VALUES (?, ?, ?)', [
@@ -226,6 +249,8 @@ export function seedIfEmpty() {
     ],
   )
 
+  seedGlassBeads()
+
   insertMany('INSERT INTO accessory_master (name, unit, rate) VALUES (?, ?, ?)', [
     ['Silicone Sealant Tube', 'pcs', 180],
     ['Weep Hole Cover', 'pcs', 5],
@@ -273,6 +298,8 @@ export function seedIfEmpty() {
 
   seedFloorSpringsAndPricing()
   seedCompatibilityRules()
+  seedSeriesCompatibilityRules()
+  seedHardwareSets()
 }
 
 function seedFloorSpringsAndPricing() {
@@ -299,6 +326,108 @@ function seedFloorSpringsAndPricing() {
   )
   insertRule.run(5, 0, null, 1, 1) // Pivot, default -> Floor Pivot
   insertRule.run(5, 60, null, 2, 5) // Pivot, heavy -> Hydraulic Floor Spring
+}
+
+// One-time migration for a dev DB seeded before finish_price_groups existed:
+// seed the same 5 tiers used in the fresh-install path, backfill each
+// existing finish's group_id from its old price_multiplier (matched to the
+// group with the closest multiplier — exact, since the tiers mirror the old
+// per-row values), then drop the now-redundant column so group_id is the
+// only source of truth going forward.
+function migrateFinishesToPriceGroups() {
+  const insertGroup = db.prepare('INSERT INTO finish_price_groups (name, multiplier) VALUES (?, ?)')
+  for (const [name, multiplier] of [
+    ['Standard RAL', 1.0],
+    ['Designer RAL', 1.1],
+    ['Metallic RAL', 1.15],
+    ['Bespoke RAL', 1.2],
+    ['Textured/Wood RAL', 1.25],
+  ] as const) {
+    insertGroup.run(name, multiplier)
+  }
+
+  const columns = db.prepare('PRAGMA table_info(profile_finishes)').all() as { name: string }[]
+  if (!columns.some((c) => c.name === 'price_multiplier')) return
+
+  const finishes = db.prepare('SELECT id, price_multiplier FROM profile_finishes').all() as {
+    id: number
+    price_multiplier: number
+  }[]
+  const groups = db.prepare('SELECT id, multiplier FROM finish_price_groups').all() as {
+    id: number
+    multiplier: number
+  }[]
+  const updateGroup = db.prepare('UPDATE profile_finishes SET group_id = ? WHERE id = ?')
+  for (const finish of finishes) {
+    const closest = groups.reduce((best, g) =>
+      Math.abs(g.multiplier - finish.price_multiplier) < Math.abs(best.multiplier - finish.price_multiplier) ? g : best,
+    )
+    updateGroup.run(closest.id, finish.id)
+  }
+  db.exec('ALTER TABLE profile_finishes DROP COLUMN price_multiplier')
+}
+
+// OEM-style bundled hardware kits (hinge+floor-spring+handle+lock priced as
+// one SKU, cheaper than picking each part separately) plus the rule bands
+// that pick one by architecture + door weight. Looked up by name rather than
+// hardcoded id so this still works if seedCompatibilityRules or an admin
+// edit ever changes row order.
+function seedHardwareSets() {
+  const idByName = (table: string, name: string): number => {
+    const row = db.prepare(`SELECT id FROM ${table} WHERE name = ?`).get(name) as { id: number } | undefined
+    if (!row) throw new Error(`Seed error: no row named "${name}" in ${table}`)
+    return row.id
+  }
+
+  const insertSet = db.prepare(
+    `INSERT INTO hardware_set_master (name, hinge_id, floor_spring_id, handle_id, lock_id, rate_per_set)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  )
+  const hingeId = (name: string) => idByName('hinge_master', name)
+  const floorSpringId = (name: string) => idByName('floor_spring_master', name)
+  const handleId = (name: string) => idByName('handle_master', name)
+  const lockId = (name: string) => idByName('lock_master', name)
+
+  insertSet.run('Sliding Economy Set', null, null, handleId('Profile Handle'), lockId('Sliding Lock'), 450)
+  insertSet.run('Sliding Premium Set', null, null, handleId('Pull Handle'), lockId('Magnetic Lock'), 850)
+  insertSet.run(
+    'Openable Standard Set',
+    hingeId('Concealed Hinge'),
+    null,
+    handleId('Square Handle'),
+    lockId('Cylinder Lock'),
+    700,
+  )
+  insertSet.run(
+    'Openable Heavy Duty Set',
+    hingeId('Heavy Duty Hinge'),
+    null,
+    handleId('Square Handle'),
+    lockId('Dead Lock'),
+    1400,
+  )
+  insertSet.run(
+    'Pivot Door Set',
+    null,
+    floorSpringId('Floor Pivot'),
+    handleId('D Handle'),
+    lockId('Glass Door Lock'),
+    1600,
+  )
+
+  const insertRule = db.prepare(
+    `INSERT INTO hardware_set_recommendation_rules
+      (door_architecture_id, profile_series_id, min_door_weight_kg, max_door_weight_kg, recommended_hardware_set_id, priority)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  )
+  const archId = (name: string) => idByName('door_architectures', name)
+  const setId = (name: string) => idByName('hardware_set_master', name)
+
+  insertRule.run(archId('Sliding'), null, 0, 40, setId('Sliding Economy Set'), 1)
+  insertRule.run(archId('Sliding'), null, 40, null, setId('Sliding Premium Set'), 5)
+  insertRule.run(archId('Openable'), null, 0, 40, setId('Openable Standard Set'), 1)
+  insertRule.run(archId('Openable'), null, 40, null, setId('Openable Heavy Duty Set'), 5)
+  insertRule.run(archId('Pivot'), null, 0, null, setId('Pivot Door Set'), 1)
 }
 
 // --- Step 17 compatibility engine data ---
@@ -370,5 +499,61 @@ function seedCompatibilityRules() {
     'door_architectures',
     idByName('door_architectures', 'Sliding'),
     'excludes',
+  )
+}
+
+// Banded by glass thickness, not by series — a thicker pane needs a
+// deeper/heavier bead regardless of which profile it's fitted to. Bands
+// cover every thickness seeded above (5, 6, 8, 8.38, 12, 24mm). Its own
+// function (rather than inline insertMany) so the migration branch for an
+// existing dev DB can call the exact same seed rows.
+function seedGlassBeads() {
+  const insertBead = db.prepare(
+    'INSERT INTO glass_bead_master (name, min_thickness_mm, max_thickness_mm, weight_per_metre_kg, rate_per_metre) VALUES (?, ?, ?, ?, ?)',
+  )
+  for (const row of [
+    ['Bead 4-6mm', 0, 6.5, 0.15, 70],
+    ['Bead 7-9mm', 6.5, 9.5, 0.2, 90],
+    ['Bead 10-14mm', 9.5, 14, 0.28, 120],
+    ['Bead 20-26mm', 14, 30, 0.4, 180],
+  ] as const) {
+    insertBead.run(...row)
+  }
+}
+
+// Series-gated hardware: some hardware is physically tied to one profile's
+// section geometry, not just to a door architecture — a hidden/groove-mount
+// handle only fits the series it was profiled for; a concealed hinge is cut
+// into a specific series' rebate depth. The Step 17 engine already handles
+// this generically (constraint_table is just a column, not a hardcoded set —
+// see compatibility.ts), so this only adds data: no engine change needed.
+function seedSeriesCompatibilityRules() {
+  const idByName = (table: string, name: string): number => {
+    const row = db.prepare(`SELECT id FROM ${table} WHERE name = ?`).get(name) as { id: number } | undefined
+    if (!row) throw new Error(`Seed error: no row named "${name}" in ${table}`)
+    return row.id
+  }
+
+  const insertRule = db.prepare(
+    `INSERT INTO compatibility_rules (rule_name, subject_table, subject_id, constraint_table, constraint_id, relation)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  )
+
+  insertRule.run(
+    'Hidden Handle requires Slimflow Slide-60',
+    'handle_master',
+    idByName('handle_master', 'Hidden Handle'),
+    'profile_series',
+    idByName('profile_series', 'Slimflow Slide-60'),
+    'requires',
+  )
+
+  insertRule.run(
+    'Concealed Hinge requires Slimflow Case-45',
+    'hinge_master',
+    idByName('hinge_master', 'Concealed Hinge'),
+    'profile_series',
+    idByName('profile_series', 'Slimflow Case-45'),
+    'requires',
   )
 }

@@ -215,6 +215,14 @@ export function ConfiguratorPage() {
           <Card>
             <CardHeader>
               <CardTitle>Recommended components</CardTitle>
+              {result.recommendedHardwareSet && (
+                <div className="mt-1 flex items-center gap-2">
+                  <Badge variant="success">Hardware Set</Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {result.recommendedHardwareSet.name} — hinge/floor-spring/handle/lock bundled as one priced SKU
+                  </span>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-4">
               <div>
