@@ -21,6 +21,10 @@ export function seedIfEmpty() {
     if (hardwareSetCount.n === 0) seedHardwareSets()
     const groupCount = db.prepare('SELECT COUNT(*) as n FROM finish_price_groups').get() as { n: number }
     if (groupCount.n === 0) migrateFinishesToPriceGroups()
+    const seriesRuleCount = db
+      .prepare("SELECT COUNT(*) as n FROM compatibility_rules WHERE constraint_table = 'profile_series'")
+      .get() as { n: number }
+    if (seriesRuleCount.n === 0) seedSeriesCompatibilityRules()
     return
   }
 
@@ -290,6 +294,7 @@ export function seedIfEmpty() {
 
   seedFloorSpringsAndPricing()
   seedCompatibilityRules()
+  seedSeriesCompatibilityRules()
   seedHardwareSets()
 }
 
@@ -490,5 +495,42 @@ function seedCompatibilityRules() {
     'door_architectures',
     idByName('door_architectures', 'Sliding'),
     'excludes',
+  )
+}
+
+// Series-gated hardware: some hardware is physically tied to one profile's
+// section geometry, not just to a door architecture — a hidden/groove-mount
+// handle only fits the series it was profiled for; a concealed hinge is cut
+// into a specific series' rebate depth. The Step 17 engine already handles
+// this generically (constraint_table is just a column, not a hardcoded set —
+// see compatibility.ts), so this only adds data: no engine change needed.
+function seedSeriesCompatibilityRules() {
+  const idByName = (table: string, name: string): number => {
+    const row = db.prepare(`SELECT id FROM ${table} WHERE name = ?`).get(name) as { id: number } | undefined
+    if (!row) throw new Error(`Seed error: no row named "${name}" in ${table}`)
+    return row.id
+  }
+
+  const insertRule = db.prepare(
+    `INSERT INTO compatibility_rules (rule_name, subject_table, subject_id, constraint_table, constraint_id, relation)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  )
+
+  insertRule.run(
+    'Hidden Handle requires Slimflow Slide-60',
+    'handle_master',
+    idByName('handle_master', 'Hidden Handle'),
+    'profile_series',
+    idByName('profile_series', 'Slimflow Slide-60'),
+    'requires',
+  )
+
+  insertRule.run(
+    'Concealed Hinge requires Slimflow Case-45',
+    'hinge_master',
+    idByName('hinge_master', 'Concealed Hinge'),
+    'profile_series',
+    idByName('profile_series', 'Slimflow Case-45'),
+    'requires',
   )
 }
