@@ -6,7 +6,9 @@ import {
   type ConfigurationResult,
   type ReferenceData,
 } from '~/lib/configuratorApi'
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import { Download } from 'lucide-react'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import { exportBomToExcel } from '~/lib/exportBom'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
@@ -329,6 +331,12 @@ export function ConfiguratorPage() {
           <Card>
             <CardHeader>
               <CardTitle>Complete BOM (Step 16)</CardTitle>
+              <CardAction>
+                <Button variant="outline" size="sm" onClick={() => exportBomToExcel(result)}>
+                  <Download className="size-3.5" />
+                  Export Excel
+                </Button>
+              </CardAction>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <Table>
