@@ -7,13 +7,13 @@ import {
   type ExtractedDimension,
   type HardwareItem,
   type PanelMaterial,
-} from '@/lib/api'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { DrawingSchematic, type SchematicInput } from '@/components/DrawingSchematic'
-import { toMillimetres } from '@/lib/units'
+} from '~/lib/api'
+import { Button } from '~/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import { Badge } from '~/components/ui/badge'
+import { Input } from '~/components/ui/input'
+import { DrawingSchematic, type SchematicInput } from '~/components/DrawingSchematic'
+import { toMillimetres } from '~/lib/units'
 
 const UNIT_OPTIONS: NonNullable<ExtractedDimension['unit']>[] = ['mm', 'cm', 'in', 'ft']
 const PANEL_MATERIAL_OPTIONS: { value: PanelMaterial; label: string }[] = [
@@ -275,7 +275,7 @@ export function ReviewPage() {
             {drawing.originalFilename}
           </h1>
         </div>
-        <Badge tone={isProcessing ? 'amber' : drawing.status === 'failed' ? 'red' : 'green'}>
+        <Badge variant={isProcessing ? 'warning' : drawing.status === 'failed' ? 'destructive' : 'success'}>
           {drawing.status.replace('_', ' ')}
         </Badge>
       </div>

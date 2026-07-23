@@ -5,11 +5,11 @@ import {
   type CompatibilityRow,
   type ConfigurationResult,
   type ReferenceData,
-} from '@/lib/configuratorApi'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+} from '~/lib/configuratorApi'
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import { Button } from '~/components/ui/button'
+import { Input } from '~/components/ui/input'
+import { Badge } from '~/components/ui/badge'
 
 function Select<T extends { id: number }>({
   value,
@@ -199,7 +199,7 @@ export function ConfiguratorPage() {
                   <div key={l.id} className="flex items-center justify-between gap-2 text-sm">
                     <span className={l.allowed ? '' : 'text-neutral-400 line-through'}>{l.name}</span>
                     {l.allowed ? (
-                      <Badge tone="green">allowed</Badge>
+                      <Badge variant="success">allowed</Badge>
                     ) : (
                       <span className="text-xs text-red-500" title={l.reasons.join('; ')}>
                         {l.reasons[0]}
@@ -216,7 +216,7 @@ export function ConfiguratorPage() {
                   <div key={h.id} className="flex items-center justify-between gap-2 text-sm">
                     <span className={h.allowed ? '' : 'text-neutral-400 line-through'}>{h.name}</span>
                     {h.allowed ? (
-                      <Badge tone="green">allowed</Badge>
+                      <Badge variant="success">allowed</Badge>
                     ) : (
                       <span className="text-xs text-red-500" title={h.reasons.join('; ')}>
                         {h.reasons[0]}

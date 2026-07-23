@@ -1,9 +1,9 @@
 import { Routes, Route, Link } from 'react-router-dom'
-import { UploadPage } from '@/pages/UploadPage'
-import { ReviewPage } from '@/pages/ReviewPage'
-import { RatesPage } from '@/pages/RatesPage'
-import { ConfiguratorPage } from '@/pages/ConfiguratorPage'
-import { AdminPage } from '@/pages/AdminPage'
+import { UploadPage } from '~/pages/UploadPage'
+import { ReviewPage } from '~/pages/ReviewPage'
+import { RatesPage } from '~/pages/RatesPage'
+import { ConfiguratorPage } from '~/pages/ConfiguratorPage'
+import { AdminPage } from '~/pages/AdminPage'
 
 export default function App() {
   return (

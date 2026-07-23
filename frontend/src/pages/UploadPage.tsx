@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, type DrawingRecord } from '@/lib/api'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { api, type DrawingRecord } from '~/lib/api'
+import { Button } from '~/components/ui/button'
+import { Card, CardContent } from '~/components/ui/card'
+import { Badge } from '~/components/ui/badge'
 
-const STATUS_TONE: Record<DrawingRecord['status'], 'neutral' | 'green' | 'amber' | 'red'> = {
-  uploaded: 'neutral',
-  processing: 'amber',
-  needs_review: 'amber',
-  ready: 'green',
-  failed: 'red',
+const STATUS_VARIANT: Record<DrawingRecord['status'], 'outline' | 'warning' | 'success' | 'destructive'> = {
+  uploaded: 'outline',
+  processing: 'warning',
+  needs_review: 'warning',
+  ready: 'success',
+  failed: 'destructive',
 }
 
 export function UploadPage() {
@@ -123,7 +123,7 @@ export function UploadPage() {
                   <span className="truncate text-sm text-neutral-800 dark:text-neutral-200">
                     {d.originalFilename}
                   </span>
-                  <Badge tone={STATUS_TONE[d.status]}>{d.status.replace('_', ' ')}</Badge>
+                  <Badge variant={STATUS_VARIANT[d.status]}>{d.status.replace('_', ' ')}</Badge>
                 </CardContent>
               </Card>
             ))}

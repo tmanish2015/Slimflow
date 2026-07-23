@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type RateMaster } from '@/lib/api'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { api, type RateMaster } from '~/lib/api'
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import { Input } from '~/components/ui/input'
+import { Button } from '~/components/ui/button'
 
 const FIELDS: { key: keyof RateMaster; label: string }[] = [
   { key: 'currency', label: 'Currency' },

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { adminApi, type AdminColumn, type AdminRow } from '@/lib/configuratorApi'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { adminApi, type AdminColumn, type AdminRow } from '~/lib/configuratorApi'
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import { Button } from '~/components/ui/button'
+import { Input } from '~/components/ui/input'
 
 function emptyRow(columns: AdminColumn[]): AdminRow {
   const row: AdminRow = {}
