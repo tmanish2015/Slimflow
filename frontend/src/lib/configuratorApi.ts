@@ -70,6 +70,16 @@ export interface ProfileLine {
   cost: number
 }
 
+export interface BomLine {
+  category: string
+  item: string
+  quantity: number
+  unit: string
+  unit_cost: number
+  total_cost: number
+  formula: string
+}
+
 export interface ConfigurationResult {
   id: string
   name: string
@@ -87,6 +97,14 @@ export interface ConfigurationResult {
   recommendedFrame: MasterRow | null
   recommendedHinge: MasterRow | null
   hingeQuantity: number
+  recommendedFloorSpring: MasterRow | null
+  recommendedHandle: MasterRow | null
+  recommendedLock: MasterRow | null
+  bomLines: BomLine[]
+  materialCost: number
+  wasteCost: number
+  totalCost: number
+  sellingPrice: number
   createdAt: string
   updatedAt: string
 }
@@ -108,6 +126,15 @@ export interface CompatibilityQuery {
   finishId?: number | ''
   glassId?: number | ''
 }
+
+export interface AdminColumn {
+  name: string
+  type: string
+  notnull: number
+  pk: number
+}
+
+export type AdminRow = Record<string, string | number | null>
 
 export interface CreateConfigurationInput {
   name?: string
@@ -150,5 +177,38 @@ export const configuratorApi = {
     if (query.finishId) params.set('finishId', String(query.finishId))
     if (query.glassId) params.set('glassId', String(query.glassId))
     return fetch(`${BASE}/compatibility?${params.toString()}`).then((r) => json<CompatibilityRow[]>(r))
+  },
+}
+
+const ADMIN_BASE = `${BASE}/admin`
+
+export const adminApi = {
+  getTables() {
+    return fetch(`${ADMIN_BASE}/tables`).then((r) => json<string[]>(r))
+  },
+  getSchema(table: string) {
+    return fetch(`${ADMIN_BASE}/${table}/schema`).then((r) => json<AdminColumn[]>(r))
+  },
+  getRows(table: string) {
+    return fetch(`${ADMIN_BASE}/${table}`).then((r) => json<AdminRow[]>(r))
+  },
+  createRow(table: string, data: AdminRow) {
+    return fetch(`${ADMIN_BASE}/${table}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then((r) => json<AdminRow>(r))
+  },
+  updateRow(table: string, id: number, data: AdminRow) {
+    return fetch(`${ADMIN_BASE}/${table}/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then((r) => json<AdminRow>(r))
+  },
+  deleteRow(table: string, id: number) {
+    return fetch(`${ADMIN_BASE}/${table}/${id}`, { method: 'DELETE' }).then((r) => {
+      if (!r.ok) throw new Error(`Delete failed: ${r.status}`)
+    })
   },
 }

@@ -3,6 +3,7 @@ import { UploadPage } from '@/pages/UploadPage'
 import { ReviewPage } from '@/pages/ReviewPage'
 import { RatesPage } from '@/pages/RatesPage'
 import { ConfiguratorPage } from '@/pages/ConfiguratorPage'
+import { AdminPage } from '@/pages/AdminPage'
 
 export default function App() {
   return (
@@ -16,6 +17,9 @@ export default function App() {
             <Link to="/configurator" className="text-sm text-neutral-500 hover:underline">
               Configurator
             </Link>
+            <Link to="/admin" className="text-sm text-neutral-500 hover:underline">
+              Admin
+            </Link>
             <Link to="/rates" className="text-sm text-neutral-500 hover:underline">
               Rate master
             </Link>
@@ -27,6 +31,7 @@ export default function App() {
         <Route path="/drawings/:id" element={<ReviewPage />} />
         <Route path="/rates" element={<RatesPage />} />
         <Route path="/configurator" element={<ConfiguratorPage />} />
+        <Route path="/admin" element={<AdminPage />} />
       </Routes>
     </div>
   )

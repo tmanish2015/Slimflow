@@ -243,7 +243,7 @@ export function ConfiguratorPage() {
             <CardHeader>
               <CardTitle>Recommended components</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-4">
               <div>
                 <div className="text-xs text-neutral-500">Estimated door weight</div>
                 <div className="text-lg font-semibold">{result.estimatedDoorWeightKg} kg</div>
@@ -288,6 +288,30 @@ export function ConfiguratorPage() {
                   </div>
                 )}
               </div>
+              <div>
+                <div className="text-xs text-neutral-500">Floor Spring</div>
+                {result.recommendedFloorSpring ? (
+                  <div className="text-sm font-medium">{result.recommendedFloorSpring.name}</div>
+                ) : (
+                  <div className="text-sm text-neutral-400">Not applicable</div>
+                )}
+              </div>
+              <div>
+                <div className="text-xs text-neutral-500">Handle</div>
+                {result.recommendedHandle ? (
+                  <div className="text-sm font-medium">{result.recommendedHandle.name}</div>
+                ) : (
+                  <div className="text-sm text-neutral-400">None compatible</div>
+                )}
+              </div>
+              <div>
+                <div className="text-xs text-neutral-500">Lock</div>
+                {result.recommendedLock ? (
+                  <div className="text-sm font-medium">{result.recommendedLock.name}</div>
+                ) : (
+                  <div className="text-sm text-neutral-400">None compatible</div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -318,6 +342,48 @@ export function ConfiguratorPage() {
                   ))}
                 </tbody>
               </table>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Complete BOM (Step 16)</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-neutral-200 text-xs text-neutral-500 dark:border-neutral-800">
+                    <th className="py-1">Category</th>
+                    <th>Item</th>
+                    <th>Qty</th>
+                    <th>Unit cost</th>
+                    <th>Total</th>
+                    <th>Formula</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.bomLines.map((line, i) => (
+                    <tr key={i} className="border-b border-neutral-100 dark:border-neutral-900">
+                      <td className="py-1">{line.category}</td>
+                      <td>{line.item}</td>
+                      <td>
+                        {line.quantity} {line.unit}
+                      </td>
+                      <td>₹{line.unit_cost.toLocaleString()}</td>
+                      <td>₹{line.total_cost.toLocaleString()}</td>
+                      <td className="max-w-xs text-xs text-neutral-400">{line.formula}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="flex flex-col items-end gap-1 text-sm">
+                <span>Material cost: ₹{result.materialCost.toLocaleString()}</span>
+                <span>Waste: ₹{result.wasteCost.toLocaleString()}</span>
+                <span className="font-medium">Total cost: ₹{result.totalCost.toLocaleString()}</span>
+                <span className="text-base font-semibold">
+                  Selling price: ₹{result.sellingPrice.toLocaleString()}
+                </span>
+              </div>
             </CardContent>
           </Card>
         </>

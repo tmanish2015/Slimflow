@@ -48,3 +48,11 @@ if (addedTrackFlag || addedHingesFlag) {
     update.run(flags.uses_track, flags.uses_hinges, name)
   }
 }
+
+addColumnIfMissing('configurations', 'recommended_floor_spring_id', 'INTEGER REFERENCES floor_spring_master(id)')
+addColumnIfMissing('configurations', 'recommended_handle_id', 'INTEGER REFERENCES handle_master(id)')
+addColumnIfMissing('configurations', 'recommended_lock_id', 'INTEGER REFERENCES lock_master(id)')
+addColumnIfMissing('configurations', 'material_cost', 'REAL')
+addColumnIfMissing('configurations', 'waste_cost', 'REAL')
+addColumnIfMissing('configurations', 'total_cost', 'REAL')
+addColumnIfMissing('configurations', 'selling_price', 'REAL')

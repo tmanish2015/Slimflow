@@ -86,6 +86,62 @@ export interface GlassMaster {
   rate_per_sqft: number
 }
 
+export interface FloorSpringMaster {
+  id: number
+  name: string
+  spring_type: string
+  max_capacity_kg: number
+  rate_per_unit: number
+}
+
+export interface HandleMaster {
+  id: number
+  name: string
+  handle_type: string
+  applicable_door_types: string
+  rate_per_unit: number
+}
+
+export interface LockMaster {
+  id: number
+  name: string
+  lock_type: string
+  applicable_door_types: string
+  rate_per_unit: number
+}
+
+export interface ConnectorMaster {
+  id: number
+  name: string
+  connector_type: string
+  rate_per_unit: number
+}
+
+export interface SealMaster {
+  id: number
+  name: string
+  rate_per_metre: number
+}
+
+export interface TapeMaster {
+  id: number
+  name: string
+  rate_per_sqft: number
+}
+
+export interface AccessoryMaster {
+  id: number
+  name: string
+  unit: string
+  rate: number
+}
+
+export interface PricingRules {
+  id: number
+  waste_percent: number
+  margin_percent: number
+}
+
 export interface ConfigurationProfileLine {
   profile_id: number
   role_name: string
@@ -93,6 +149,16 @@ export interface ConfigurationProfileLine {
   length_mm: number
   weight_kg: number
   cost: number
+}
+
+export interface ConfigurationBomLine {
+  category: string
+  item: string
+  quantity: number
+  unit: string
+  unit_cost: number
+  total_cost: number
+  formula: string
 }
 
 export interface ConfigurationResult {
@@ -112,6 +178,14 @@ export interface ConfigurationResult {
   recommendedFrame: FrameMaster | null
   recommendedHinge: HingeMaster | null
   hingeQuantity: number
+  recommendedFloorSpring: FloorSpringMaster | null
+  recommendedHandle: HandleMaster | null
+  recommendedLock: LockMaster | null
+  bomLines: ConfigurationBomLine[]
+  materialCost: number
+  wasteCost: number
+  totalCost: number
+  sellingPrice: number
   createdAt: string
   updatedAt: string
 }

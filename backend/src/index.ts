@@ -3,6 +3,7 @@ import cors from 'cors'
 import { PROCESSED_DIR, UPLOAD_DIR } from './store.js'
 import { drawingsRouter, rateMasterRouter } from './routes/drawings.js'
 import { configuratorRouter } from './configurator/routes.js'
+import { adminRouter } from './configurator/admin.js'
 import { seedIfEmpty } from './configurator/seed.js'
 
 seedIfEmpty()
@@ -18,6 +19,7 @@ app.use('/processed', express.static(PROCESSED_DIR))
 app.use('/api/drawings', drawingsRouter)
 app.use('/api/rate-master', rateMasterRouter)
 app.use('/api/configurator', configuratorRouter)
+app.use('/api/configurator/admin', adminRouter)
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
 

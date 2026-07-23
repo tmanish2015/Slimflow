@@ -1,9 +1,13 @@
 import { db } from './db.js'
+import { evaluateCompatibility, type Selection } from './compatibility.js'
 import type {
   ConfigurationProfileLine,
   DoorArchitecture,
+  FloorSpringMaster,
   FrameMaster,
+  HandleMaster,
   HingeMaster,
+  LockMaster,
   PanelConfiguration,
   ProfileRole,
   TrackMaster,
@@ -199,4 +203,53 @@ export function recommendHinge(architecture: DoorArchitecture, doorWeightKg: num
  * type was actually recommended (hinged architectures). */
 export function estimateHingeQuantity(heightMm: number): number {
   return Math.max(MIN_HINGES, Math.ceil(heightMm / HINGE_SPACING_MM))
+}
+
+/**
+ * Step 10 — floor spring recommendation. No architecture flag column here
+ * (unlike uses_track/uses_hinges): only Pivot doors have any
+ * floor_spring_recommendation_rules rows seeded, so the absence of a match
+ * *is* the correct "not applicable" for every other architecture — adding an
+ * explicit flag would just duplicate that same fact in two places.
+ */
+export function recommendFloorSpring(architecture: DoorArchitecture, doorWeightKg: number): FloorSpringMaster | null {
+  const rule = db
+    .prepare(
+      `SELECT * FROM floor_spring_recommendation_rules
+       WHERE (door_architecture_id IS NULL OR door_architecture_id = ?)
+         AND min_door_weight_kg <= ? AND (max_door_weight_kg IS NULL OR max_door_weight_kg >= ?)
+       ORDER BY priority DESC LIMIT 1`,
+    )
+    .get(architecture.id, doorWeightKg, doorWeightKg) as { recommended_floor_spring_id: number } | undefined
+  if (!rule) return null
+  return db
+    .prepare('SELECT * FROM floor_spring_master WHERE id = ?')
+    .get(rule.recommended_floor_spring_id) as unknown as FloorSpringMaster
+}
+
+/**
+ * Steps 11/12 — handle/lock recommendation. Rather than a separate
+ * recommendation-rule table, this reuses the Step 17 compatibility engine
+ * directly: among rows the compatibility engine allows for this selection,
+ * recommend the cheapest. Two sources of truth for "what's compatible" would
+ * risk the exact drift bug found earlier in this project (track/frame
+ * capacity vs. panel-config flag) — there's only one here.
+ */
+function recommendCheapestCompatible<T extends { id: number; rate_per_unit: number }>(
+  table: string,
+  selection: Selection,
+): T | null {
+  const rows = db.prepare(`SELECT * FROM ${table} ORDER BY rate_per_unit ASC`).all() as unknown as T[]
+  for (const row of rows) {
+    if (evaluateCompatibility(table, row.id, selection).allowed) return row
+  }
+  return null
+}
+
+export function recommendHandle(selection: Selection): HandleMaster | null {
+  return recommendCheapestCompatible<HandleMaster>('handle_master', selection)
+}
+
+export function recommendLock(selection: Selection): LockMaster | null {
+  return recommendCheapestCompatible<LockMaster>('lock_master', selection)
 }

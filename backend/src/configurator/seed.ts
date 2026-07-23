@@ -15,6 +15,8 @@ export function seedIfEmpty() {
     // re-running (and duplicating) everything else.
     const ruleCount = db.prepare('SELECT COUNT(*) as n FROM compatibility_rules').get() as { n: number }
     if (ruleCount.n === 0) seedCompatibilityRules()
+    const floorSpringCount = db.prepare('SELECT COUNT(*) as n FROM floor_spring_master').get() as { n: number }
+    if (floorSpringCount.n === 0) seedFloorSpringsAndPricing()
     return
   }
 
@@ -168,8 +170,8 @@ export function seedIfEmpty() {
     [
       ['Square Handle', 'square', JSON.stringify(['Openable', 'Sliding', 'Fixed']), 350],
       ['Round Handle', 'round', JSON.stringify(['Openable']), 300],
-      ['Pull Handle', 'pull', JSON.stringify(['Sliding', 'Openable']), 450],
-      ['D Handle', 'd_handle', JSON.stringify(['Openable']), 400],
+      ['Pull Handle', 'pull', JSON.stringify(['Sliding', 'Openable', 'Pivot']), 450],
+      ['D Handle', 'd_handle', JSON.stringify(['Openable', 'Pivot']), 400],
       ['Flush Handle', 'flush', JSON.stringify(['Sliding', 'Pocket Door']), 250],
       ['Shower Handle', 'shower', JSON.stringify(['Fixed']), 600],
       ['Hidden Handle', 'hidden', JSON.stringify(['Sliding', 'Pocket Door']), 500],
@@ -269,7 +271,34 @@ export function seedIfEmpty() {
     ],
   )
 
+  seedFloorSpringsAndPricing()
   seedCompatibilityRules()
+}
+
+function seedFloorSpringsAndPricing() {
+  const insertSpring = db.prepare(
+    'INSERT INTO floor_spring_master (name, spring_type, max_capacity_kg, rate_per_unit) VALUES (?, ?, ?, ?)',
+  )
+  for (const row of [
+    ['Floor Pivot', 'floor_pivot', 60, 800],
+    ['Hydraulic Floor Spring', 'hydraulic_floor_spring', 120, 2200],
+    ['Top Pivot', 'top_pivot', 60, 350],
+    ['Bottom Pivot', 'bottom_pivot', 60, 350],
+  ] as const) {
+    insertSpring.run(...row)
+  }
+
+  db.prepare('INSERT INTO pricing_rules (waste_percent, margin_percent) VALUES (?, ?)').run(5, 18)
+
+  // floor_spring ids: 1 Floor Pivot, 2 Hydraulic Floor Spring, 3 Top Pivot, 4 Bottom Pivot
+  // door_architecture id 5 = Pivot. Only Pivot-architecture doors use floor
+  // springs in this model (the rest swing on hinges) — no rows for other
+  // architectures -> none recommended.
+  const insertRule = db.prepare(
+    'INSERT INTO floor_spring_recommendation_rules (door_architecture_id, min_door_weight_kg, max_door_weight_kg, recommended_floor_spring_id, priority) VALUES (?, ?, ?, ?, ?)',
+  )
+  insertRule.run(5, 0, null, 1, 1) // Pivot, default -> Floor Pivot
+  insertRule.run(5, 60, null, 2, 5) // Pivot, heavy -> Hydraulic Floor Spring
 }
 
 // --- Step 17 compatibility engine data ---

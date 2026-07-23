@@ -7,12 +7,27 @@ import {
   computeProfileLines,
   estimateDoorWeightKg,
   estimateHingeQuantity,
+  recommendFloorSpring,
   recommendFrame,
+  recommendHandle,
   recommendHinge,
+  recommendLock,
   recommendTrack,
 } from './rules.js'
+import {
+  computeAccessoryLines,
+  computeConnectorLines,
+  computeGlassLine,
+  computeSealLine,
+  computeTapeLine,
+  getDefaultSeal,
+  getDefaultTape,
+  getPricingRules,
+  rollUpBom,
+} from './bom.js'
 import { evaluateCompatibility, filterCompatible, type Selection } from './compatibility.js'
 import type {
+  ConfigurationBomLine,
   ConfigurationResult,
   DoorArchitecture,
   GlassMaster,
@@ -143,6 +158,101 @@ function buildConfiguration(id: string, input: z.infer<typeof createConfiguratio
   }
   const hingeQuantity = hinge ? estimateHingeQuantity(input.heightMm) : 0
 
+  let floorSpring = recommendFloorSpring(architecture, doorWeightKg)
+  if (floorSpring && !evaluateCompatibility('floor_spring_master', floorSpring.id, selection).allowed) {
+    floorSpring = null
+  }
+
+  const handle = recommendHandle(selection)
+  const lock = recommendLock(selection)
+
+  // --- Step 16: assemble the complete BOM from every component above ---
+  const bomLines: ConfigurationBomLine[] = profileLines.map((l) => ({
+    category: 'Profile',
+    item: l.role_name,
+    quantity: l.quantity,
+    unit: 'pcs',
+    unit_cost: l.quantity > 0 ? Number((l.cost / l.quantity).toFixed(2)) : 0,
+    total_cost: l.cost,
+    formula: `${l.length_mm}mm cut length`,
+  }))
+
+  bomLines.push(...computeConnectorLines(profileLines))
+
+  if (track) {
+    const trackLengthM = (input.widthMm / 1000) * panelConfig.track_count
+    bomLines.push({
+      category: 'Track',
+      item: track.name,
+      quantity: Number(trackLengthM.toFixed(2)),
+      unit: 'm',
+      unit_cost: track.rate_per_metre,
+      total_cost: Number((trackLengthM * track.rate_per_metre).toFixed(2)),
+      formula: `width × ${panelConfig.track_count} track(s)`,
+    })
+  }
+
+  if (hinge && hingeQuantity > 0) {
+    bomLines.push({
+      category: 'Hinge',
+      item: hinge.name,
+      quantity: hingeQuantity,
+      unit: 'pcs',
+      unit_cost: hinge.rate_per_unit,
+      total_cost: Number((hingeQuantity * hinge.rate_per_unit).toFixed(2)),
+      formula: '1 per ~700mm height, min 2',
+    })
+  }
+
+  if (floorSpring) {
+    bomLines.push({
+      category: 'Floor Spring',
+      item: floorSpring.name,
+      quantity: 1,
+      unit: 'pcs',
+      unit_cost: floorSpring.rate_per_unit,
+      total_cost: floorSpring.rate_per_unit,
+      formula: 'default 1 per unit',
+    })
+  }
+
+  if (handle) {
+    bomLines.push({
+      category: 'Handle',
+      item: handle.name,
+      quantity: 1,
+      unit: 'pcs',
+      unit_cost: handle.rate_per_unit,
+      total_cost: handle.rate_per_unit,
+      formula: 'cheapest compatible option (Step 17)',
+    })
+  }
+
+  if (lock) {
+    bomLines.push({
+      category: 'Lock',
+      item: lock.name,
+      quantity: 1,
+      unit: 'pcs',
+      unit_cost: lock.rate_per_unit,
+      total_cost: lock.rate_per_unit,
+      formula: 'cheapest compatible option (Step 17)',
+    })
+  }
+
+  const seal = getDefaultSeal()
+  if (seal) bomLines.push(computeSealLine(profileLines, seal))
+
+  const tape = getDefaultTape()
+  if (tape) bomLines.push(computeTapeLine(input.widthMm, input.heightMm, tape))
+
+  if (glass) bomLines.push(computeGlassLine(input.widthMm, input.heightMm, glass))
+
+  bomLines.push(...computeAccessoryLines())
+
+  const pricing = getPricingRules()
+  const totals = rollUpBom(bomLines, pricing)
+
   const now = new Date().toISOString()
 
   return {
@@ -162,6 +272,14 @@ function buildConfiguration(id: string, input: z.infer<typeof createConfiguratio
     recommendedFrame: frame,
     recommendedHinge: hinge,
     hingeQuantity,
+    recommendedFloorSpring: floorSpring,
+    recommendedHandle: handle,
+    recommendedLock: lock,
+    bomLines,
+    materialCost: totals.materialCost,
+    wasteCost: totals.wasteCost,
+    totalCost: totals.totalCost,
+    sellingPrice: totals.sellingPrice,
     createdAt: now,
     updatedAt: now,
   }
@@ -172,8 +290,9 @@ function persistConfiguration(result: ConfigurationResult) {
     `INSERT INTO configurations
       (id, name, system_type_id, door_architecture_id, panel_configuration_id, profile_series_id, finish_id, glass_id,
        width_mm, height_mm, estimated_door_weight_kg, recommended_track_id, recommended_frame_id, recommended_hinge_id,
-       created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       recommended_floor_spring_id, recommended_handle_id, recommended_lock_id,
+       material_cost, waste_cost, total_cost, selling_price, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     result.id,
     result.name,
@@ -189,6 +308,13 @@ function persistConfiguration(result: ConfigurationResult) {
     result.recommendedTrack?.id ?? null,
     result.recommendedFrame?.id ?? null,
     result.recommendedHinge?.id ?? null,
+    result.recommendedFloorSpring?.id ?? null,
+    result.recommendedHandle?.id ?? null,
+    result.recommendedLock?.id ?? null,
+    result.materialCost,
+    result.wasteCost,
+    result.totalCost,
+    result.sellingPrice,
     result.createdAt,
     result.updatedAt,
   )
@@ -200,6 +326,15 @@ function persistConfiguration(result: ConfigurationResult) {
   )
   for (const line of result.profileLines) {
     insertLine.run(result.id, line.profile_id, line.role_name, line.quantity, line.length_mm, line.weight_kg, line.cost)
+  }
+
+  const insertBomLine = db.prepare(
+    `INSERT INTO configuration_bom_lines
+      (configuration_id, category, item, quantity, unit, unit_cost, total_cost, formula)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+  for (const line of result.bomLines) {
+    insertBomLine.run(result.id, line.category, line.item, line.quantity, line.unit, line.unit_cost, line.total_cost, line.formula)
   }
 }
 
@@ -233,6 +368,9 @@ configuratorRouter.get(
     const profileLines = db
       .prepare('SELECT * FROM configuration_profile_lines WHERE configuration_id = ?')
       .all(req.params.id)
-    res.json({ ...configuration, profileLines })
+    const bomLines = db
+      .prepare('SELECT * FROM configuration_bom_lines WHERE configuration_id = ?')
+      .all(req.params.id)
+    res.json({ ...configuration, profileLines, bomLines })
   }),
 )
