@@ -4,30 +4,31 @@ import { parseCookie, stringifySetCookie } from 'cookie'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { asyncHandler } from './asyncHandler.js'
+import { query, queryOne } from './configurator/db.js'
 
 const SESSION_COOKIE = 'slimflow_session'
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000 // 12h
 
 // Single shared admin login (no multi-user accounts yet — see
 // frontend/src/modules/auth/README.md for the eventual per-tenant scope).
-// Sessions are an in-memory Set of opaque random tokens: simplest correct
-// option for a single-process gate — a restart just logs everyone out,
-// which is fine at this scope. The token itself carries no data (never
-// decoded), so it needs no signing, only sufficient randomness.
-const sessions = new Map<string, number>() // token -> expiresAt
-
-function createSession(): string {
+// Sessions live in Postgres, not an in-memory Map — a serverless function
+// may route consecutive requests to different container instances, so
+// in-process state doesn't survive between them. The token itself carries
+// no data (never decoded), so it needs no signing, only sufficient
+// randomness.
+async function createSession(): Promise<string> {
   const token = randomBytes(32).toString('hex')
-  sessions.set(token, Date.now() + SESSION_TTL_MS)
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS)
+  await query('INSERT INTO sessions (token, expires_at) VALUES ($1, $2)', [token, expiresAt])
   return token
 }
 
-function isValidSession(token: string | undefined): boolean {
+async function isValidSession(token: string | undefined): Promise<boolean> {
   if (!token) return false
-  const expiresAt = sessions.get(token)
-  if (!expiresAt) return false
-  if (expiresAt < Date.now()) {
-    sessions.delete(token)
+  const row = await queryOne<{ expires_at: string }>('SELECT expires_at FROM sessions WHERE token = $1', [token])
+  if (!row) return false
+  if (new Date(row.expires_at).getTime() < Date.now()) {
+    await query('DELETE FROM sessions WHERE token = $1', [token])
     return false
   }
   return true
@@ -45,11 +46,15 @@ function safeEqual(a: string, b: string): boolean {
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const cookies = parseCookie(req.headers.cookie ?? '')
-  if (!isValidSession(cookies[SESSION_COOKIE])) {
-    res.status(401).json({ error: 'Not authenticated' })
-    return
-  }
-  next()
+  isValidSession(cookies[SESSION_COOKIE])
+    .then((valid) => {
+      if (!valid) {
+        res.status(401).json({ error: 'Not authenticated' })
+        return
+      }
+      next()
+    })
+    .catch(next)
 }
 
 const loginSchema = z.object({
@@ -79,7 +84,7 @@ authRouter.post(
       return
     }
 
-    const token = createSession()
+    const token = await createSession()
     res.setHeader(
       'Set-Cookie',
       stringifySetCookie({
@@ -100,7 +105,7 @@ authRouter.post(
   asyncHandler(async (req, res) => {
     const cookies = parseCookie(req.headers.cookie ?? '')
     const token = cookies[SESSION_COOKIE]
-    if (token) sessions.delete(token)
+    if (token) await query('DELETE FROM sessions WHERE token = $1', [token])
     res.setHeader(
       'Set-Cookie',
       stringifySetCookie({ name: SESSION_COOKIE, value: '', httpOnly: true, path: '/', maxAge: 0 }),
@@ -113,6 +118,6 @@ authRouter.get(
   '/me',
   asyncHandler(async (req, res) => {
     const cookies = parseCookie(req.headers.cookie ?? '')
-    res.json({ authenticated: isValidSession(cookies[SESSION_COOKIE]) })
+    res.json({ authenticated: await isValidSession(cookies[SESSION_COOKIE]) })
   }),
 )

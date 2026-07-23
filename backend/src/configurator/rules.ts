@@ -1,4 +1,4 @@
-import { db } from './db.js'
+import { query, queryOne } from './db.js'
 import { evaluateCompatibility, type Selection } from './compatibility.js'
 import type {
   ConfigurationProfileLine,
@@ -28,21 +28,14 @@ const MIN_HINGES = 2
  * configs). Rates apply the finish's price_multiplier — changing finish
  * changes every line's cost without touching the quantities.
  */
-export function computeProfileLines(
+export async function computeProfileLines(
   seriesId: number,
   panelConfig: PanelConfiguration,
   widthMm: number,
   heightMm: number,
   priceMultiplier: number,
-): ConfigurationProfileLine[] {
-  const rows = db
-    .prepare(
-      `SELECT p.id as profile_id, p.name, p.weight_per_metre_kg, p.rate_per_kg,
-              r.name as role_name, r.orientation, r.scaling_rule, r.fixed_qty
-       FROM profiles p JOIN profile_roles r ON r.id = p.role_id
-       WHERE p.series_id = ?`,
-    )
-    .all(seriesId) as {
+): Promise<ConfigurationProfileLine[]> {
+  const rows = await query<{
     profile_id: number
     name: string
     weight_per_metre_kg: number
@@ -51,7 +44,13 @@ export function computeProfileLines(
     orientation: 'horizontal' | 'vertical'
     scaling_rule: ProfileRole['scaling_rule']
     fixed_qty: number
-  }[]
+  }>(
+    `SELECT p.id as profile_id, p.name, p.weight_per_metre_kg, p.rate_per_kg,
+            r.name as role_name, r.orientation, r.scaling_rule, r.fixed_qty
+     FROM profiles p JOIN profile_roles r ON r.id = p.role_id
+     WHERE p.series_id = $1`,
+    [seriesId],
+  )
 
   return rows.map((row) => {
     const quantity =
@@ -101,43 +100,37 @@ export function estimateDoorWeightKg(
  * regardless of weight (that gate is data on door_architectures, not a
  * name check in code — see schema.sql).
  */
-export function recommendTrack(
+export async function recommendTrack(
   doorWeightKg: number,
   panelConfig: PanelConfiguration,
   widthMm: number,
   architecture: DoorArchitecture,
-): TrackMaster | null {
+): Promise<TrackMaster | null> {
   if (!architecture.uses_track) return null
 
-  const rules = db
-    .prepare(
-      `SELECT * FROM track_recommendation_rules
-       WHERE min_door_weight_kg <= ?
-         AND (max_door_weight_kg IS NULL OR max_door_weight_kg >= ?)
-         AND (requires_heavy_duty_config IS NULL OR requires_heavy_duty_config = ?)
-         AND (max_span_mm IS NULL OR max_span_mm >= ?)
-       ORDER BY priority DESC LIMIT 1`,
-    )
-    .get(doorWeightKg, doorWeightKg, panelConfig.is_heavy_duty, widthMm) as { recommended_track_id: number } | undefined
+  const rule = await queryOne<{ recommended_track_id: number }>(
+    `SELECT * FROM track_recommendation_rules
+     WHERE min_door_weight_kg <= $1
+       AND (max_door_weight_kg IS NULL OR max_door_weight_kg >= $1)
+       AND (requires_heavy_duty_config IS NULL OR requires_heavy_duty_config = $2)
+       AND (max_span_mm IS NULL OR max_span_mm >= $3)
+     ORDER BY priority DESC LIMIT 1`,
+    [doorWeightKg, panelConfig.is_heavy_duty, widthMm],
+  )
 
-  let track = rules
-    ? (db.prepare('SELECT * FROM track_master WHERE id = ?').get(rules.recommended_track_id) as unknown as
-        | TrackMaster
-        | undefined)
-    : undefined
+  let track = rule ? await queryOne<TrackMaster>('SELECT * FROM track_master WHERE id = $1', [rule.recommended_track_id]) : undefined
 
   if (!track || track.max_capacity_kg < doorWeightKg || track.max_span_mm < widthMm) {
-    const capable = db
-      .prepare(
-        `SELECT * FROM track_master WHERE duty_class != 'soft_close' AND max_capacity_kg >= ? AND max_span_mm >= ?
-         ORDER BY max_capacity_kg ASC LIMIT 1`,
-      )
-      .get(doorWeightKg, widthMm) as unknown as TrackMaster | undefined
+    const capable = await queryOne<TrackMaster>(
+      `SELECT * FROM track_master WHERE duty_class != 'soft_close' AND max_capacity_kg >= $1 AND max_span_mm >= $2
+       ORDER BY max_capacity_kg ASC LIMIT 1`,
+      [doorWeightKg, widthMm],
+    )
     track =
       capable ??
-      (db
-        .prepare(`SELECT * FROM track_master WHERE duty_class != 'soft_close' ORDER BY max_capacity_kg DESC LIMIT 1`)
-        .get() as unknown as TrackMaster | undefined) ??
+      (await queryOne<TrackMaster>(
+        `SELECT * FROM track_master WHERE duty_class != 'soft_close' ORDER BY max_capacity_kg DESC LIMIT 1`,
+      )) ??
       track
   }
   return track ?? null
@@ -149,32 +142,26 @@ export function recommendTrack(
  * frame can't actually bear the estimated door weight gets escalated to the
  * cheapest frame that can.
  */
-export function recommendFrame(heightMm: number, widthMm: number, doorWeightKg: number): FrameMaster | null {
-  const rule = db
-    .prepare(
-      `SELECT * FROM frame_recommendation_rules
-       WHERE min_height_mm <= ? AND (max_height_mm IS NULL OR max_height_mm >= ?)
-         AND min_width_mm <= ? AND (max_width_mm IS NULL OR max_width_mm >= ?)
-         AND min_total_weight_kg <= ?
-       ORDER BY priority DESC LIMIT 1`,
-    )
-    .get(heightMm, heightMm, widthMm, widthMm, doorWeightKg) as { recommended_frame_id: number } | undefined
+export async function recommendFrame(heightMm: number, widthMm: number, doorWeightKg: number): Promise<FrameMaster | null> {
+  const rule = await queryOne<{ recommended_frame_id: number }>(
+    `SELECT * FROM frame_recommendation_rules
+     WHERE min_height_mm <= $1 AND (max_height_mm IS NULL OR max_height_mm >= $1)
+       AND min_width_mm <= $2 AND (max_width_mm IS NULL OR max_width_mm >= $2)
+       AND min_total_weight_kg <= $3
+     ORDER BY priority DESC LIMIT 1`,
+    [heightMm, widthMm, doorWeightKg],
+  )
 
-  let frame = rule
-    ? (db.prepare('SELECT * FROM frame_master WHERE id = ?').get(rule.recommended_frame_id) as unknown as
-        | FrameMaster
-        | undefined)
-    : undefined
+  let frame = rule ? await queryOne<FrameMaster>('SELECT * FROM frame_master WHERE id = $1', [rule.recommended_frame_id]) : undefined
 
   if (!frame || frame.max_capacity_kg < doorWeightKg) {
-    const capable = db
-      .prepare('SELECT * FROM frame_master WHERE max_capacity_kg >= ? ORDER BY max_capacity_kg ASC LIMIT 1')
-      .get(doorWeightKg) as unknown as FrameMaster | undefined
+    const capable = await queryOne<FrameMaster>(
+      'SELECT * FROM frame_master WHERE max_capacity_kg >= $1 ORDER BY max_capacity_kg ASC LIMIT 1',
+      [doorWeightKg],
+    )
     frame =
       capable ??
-      (db.prepare('SELECT * FROM frame_master ORDER BY max_capacity_kg DESC LIMIT 1').get() as unknown as
-        | FrameMaster
-        | undefined) ??
+      (await queryOne<FrameMaster>('SELECT * FROM frame_master ORDER BY max_capacity_kg DESC LIMIT 1')) ??
       frame
   }
   return frame ?? null
@@ -185,19 +172,18 @@ export function recommendFrame(heightMm: number, widthMm: number, doorWeightKg: 
  * not a name check) — Sliding/Fixed/Pocket Door correctly get no hinge at
  * all, same reasoning as recommendTrack's uses_track gate.
  */
-export function recommendHinge(architecture: DoorArchitecture, doorWeightKg: number): HingeMaster | null {
+export async function recommendHinge(architecture: DoorArchitecture, doorWeightKg: number): Promise<HingeMaster | null> {
   if (!architecture.uses_hinges) return null
 
-  const rule = db
-    .prepare(
-      `SELECT * FROM hinge_recommendation_rules
-       WHERE (door_architecture_id IS NULL OR door_architecture_id = ?)
-         AND min_door_weight_kg <= ? AND (max_door_weight_kg IS NULL OR max_door_weight_kg >= ?)
-       ORDER BY priority DESC LIMIT 1`,
-    )
-    .get(architecture.id, doorWeightKg, doorWeightKg) as { recommended_hinge_id: number } | undefined
+  const rule = await queryOne<{ recommended_hinge_id: number }>(
+    `SELECT * FROM hinge_recommendation_rules
+     WHERE (door_architecture_id IS NULL OR door_architecture_id = $1)
+       AND min_door_weight_kg <= $2 AND (max_door_weight_kg IS NULL OR max_door_weight_kg >= $2)
+     ORDER BY priority DESC LIMIT 1`,
+    [architecture.id, doorWeightKg],
+  )
   if (!rule) return null
-  return db.prepare('SELECT * FROM hinge_master WHERE id = ?').get(rule.recommended_hinge_id) as unknown as HingeMaster
+  return (await queryOne<HingeMaster>('SELECT * FROM hinge_master WHERE id = $1', [rule.recommended_hinge_id])) ?? null
 }
 
 /** Same disclosed rule as the drawing-recognition hardware suggestion:
@@ -214,19 +200,23 @@ export function estimateHingeQuantity(heightMm: number): number {
  * *is* the correct "not applicable" for every other architecture — adding an
  * explicit flag would just duplicate that same fact in two places.
  */
-export function recommendFloorSpring(architecture: DoorArchitecture, doorWeightKg: number): FloorSpringMaster | null {
-  const rule = db
-    .prepare(
-      `SELECT * FROM floor_spring_recommendation_rules
-       WHERE (door_architecture_id IS NULL OR door_architecture_id = ?)
-         AND min_door_weight_kg <= ? AND (max_door_weight_kg IS NULL OR max_door_weight_kg >= ?)
-       ORDER BY priority DESC LIMIT 1`,
-    )
-    .get(architecture.id, doorWeightKg, doorWeightKg) as { recommended_floor_spring_id: number } | undefined
+export async function recommendFloorSpring(
+  architecture: DoorArchitecture,
+  doorWeightKg: number,
+): Promise<FloorSpringMaster | null> {
+  const rule = await queryOne<{ recommended_floor_spring_id: number }>(
+    `SELECT * FROM floor_spring_recommendation_rules
+     WHERE (door_architecture_id IS NULL OR door_architecture_id = $1)
+       AND min_door_weight_kg <= $2 AND (max_door_weight_kg IS NULL OR max_door_weight_kg >= $2)
+     ORDER BY priority DESC LIMIT 1`,
+    [architecture.id, doorWeightKg],
+  )
   if (!rule) return null
-  return db
-    .prepare('SELECT * FROM floor_spring_master WHERE id = ?')
-    .get(rule.recommended_floor_spring_id) as unknown as FloorSpringMaster
+  return (
+    (await queryOne<FloorSpringMaster>('SELECT * FROM floor_spring_master WHERE id = $1', [
+      rule.recommended_floor_spring_id,
+    ])) ?? null
+  )
 }
 
 /**
@@ -237,13 +227,13 @@ export function recommendFloorSpring(architecture: DoorArchitecture, doorWeightK
  * risk the exact drift bug found earlier in this project (track/frame
  * capacity vs. panel-config flag) — there's only one here.
  */
-function recommendCheapestCompatible<T extends { id: number; rate_per_unit: number }>(
+async function recommendCheapestCompatible<T extends { id: number; rate_per_unit: number }>(
   table: string,
   selection: Selection,
-): T | null {
-  const rows = db.prepare(`SELECT * FROM ${table} ORDER BY rate_per_unit ASC`).all() as unknown as T[]
+): Promise<T | null> {
+  const rows = await query<T>(`SELECT * FROM ${table} ORDER BY rate_per_unit ASC`)
   for (const row of rows) {
-    if (evaluateCompatibility(table, row.id, selection).allowed) return row
+    if ((await evaluateCompatibility(table, row.id, selection)).allowed) return row
   }
   return null
 }
@@ -258,26 +248,25 @@ function recommendCheapestCompatible<T extends { id: number; rate_per_unit: numb
  * recommendHinge/recommendFloorSpring above) — this function only resolves
  * the rule match, it doesn't validate compatibility itself.
  */
-export function recommendHardwareSet(
+export async function recommendHardwareSet(
   architecture: DoorArchitecture,
   profileSeriesId: number,
   doorWeightKg: number,
-): HardwareSetMaster | null {
-  const rule = db
-    .prepare(
-      `SELECT * FROM hardware_set_recommendation_rules
-       WHERE (door_architecture_id IS NULL OR door_architecture_id = ?)
-         AND (profile_series_id IS NULL OR profile_series_id = ?)
-         AND min_door_weight_kg <= ? AND (max_door_weight_kg IS NULL OR max_door_weight_kg >= ?)
-       ORDER BY priority DESC LIMIT 1`,
-    )
-    .get(architecture.id, profileSeriesId, doorWeightKg, doorWeightKg) as
-    | { recommended_hardware_set_id: number }
-    | undefined
+): Promise<HardwareSetMaster | null> {
+  const rule = await queryOne<{ recommended_hardware_set_id: number }>(
+    `SELECT * FROM hardware_set_recommendation_rules
+     WHERE (door_architecture_id IS NULL OR door_architecture_id = $1)
+       AND (profile_series_id IS NULL OR profile_series_id = $2)
+       AND min_door_weight_kg <= $3 AND (max_door_weight_kg IS NULL OR max_door_weight_kg >= $3)
+     ORDER BY priority DESC LIMIT 1`,
+    [architecture.id, profileSeriesId, doorWeightKg],
+  )
   if (!rule) return null
-  return db
-    .prepare('SELECT * FROM hardware_set_master WHERE id = ?')
-    .get(rule.recommended_hardware_set_id) as unknown as HardwareSetMaster
+  return (
+    (await queryOne<HardwareSetMaster>('SELECT * FROM hardware_set_master WHERE id = $1', [
+      rule.recommended_hardware_set_id,
+    ])) ?? null
+  )
 }
 
 /**
@@ -287,22 +276,21 @@ export function recommendHardwareSet(
  * column: bands are expected not to overlap, so the first match is the only
  * match, unlike the weight-banded recommendation tables above.
  */
-export function recommendGlassBead(thicknessMm: number): GlassBeadMaster | null {
+export async function recommendGlassBead(thicknessMm: number): Promise<GlassBeadMaster | null> {
   return (
-    (db
-      .prepare(
-        `SELECT * FROM glass_bead_master
-         WHERE min_thickness_mm <= ? AND (max_thickness_mm IS NULL OR max_thickness_mm >= ?)
-         LIMIT 1`,
-      )
-      .get(thicknessMm, thicknessMm) as unknown as GlassBeadMaster | undefined) ?? null
+    (await queryOne<GlassBeadMaster>(
+      `SELECT * FROM glass_bead_master
+       WHERE min_thickness_mm <= $1 AND (max_thickness_mm IS NULL OR max_thickness_mm >= $1)
+       LIMIT 1`,
+      [thicknessMm],
+    )) ?? null
   )
 }
 
-export function recommendHandle(selection: Selection): HandleMaster | null {
+export async function recommendHandle(selection: Selection): Promise<HandleMaster | null> {
   return recommendCheapestCompatible<HandleMaster>('handle_master', selection)
 }
 
-export function recommendLock(selection: Selection): LockMaster | null {
+export async function recommendLock(selection: Selection): Promise<LockMaster | null> {
   return recommendCheapestCompatible<LockMaster>('lock_master', selection)
 }

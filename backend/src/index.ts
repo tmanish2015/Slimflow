@@ -1,15 +1,20 @@
-process.loadEnvFile()
+// No .env file exists on Vercel (env vars come from its dashboard directly
+// into process.env) — only load one for local dev, where it does exist.
+if (!process.env.VERCEL) {
+  try {
+    process.loadEnvFile()
+  } catch {
+    // No backend/.env yet locally either — fall through with whatever's
+    // already in process.env (matches the pre-existing local-dev behavior).
+  }
+}
 
 import express, { type ErrorRequestHandler } from 'express'
 import cors from 'cors'
-import { PROCESSED_DIR, UPLOAD_DIR } from './store.js'
-import { drawingsRouter, rateMasterRouter } from './routes/drawings.js'
+import { drawingsRouter, processedRouter, rateMasterRouter } from './routes/drawings.js'
 import { configuratorRouter } from './configurator/routes.js'
 import { adminRouter } from './configurator/admin.js'
-import { seedIfEmpty } from './configurator/seed.js'
 import { authRouter, requireAuth } from './auth.js'
-
-seedIfEmpty()
 
 const app = express()
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787
@@ -19,8 +24,11 @@ app.use(express.json())
 
 app.use('/api/auth', authRouter)
 
-app.use('/uploads', requireAuth, express.static(UPLOAD_DIR))
-app.use('/processed', requireAuth, express.static(PROCESSED_DIR))
+// Uploaded originals + OCR preview PNGs live in Supabase Storage now, not
+// local disk — /processed proxies the download through (see
+// routes/drawings.ts); the raw original is only ever read server-side by
+// processDrawing, so there's no equivalent /uploads route to keep.
+app.use('/processed', requireAuth, processedRouter)
 
 app.use('/api/drawings', requireAuth, drawingsRouter)
 app.use('/api/rate-master', requireAuth, rateMasterRouter)
@@ -38,6 +46,12 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 }
 app.use(errorHandler)
 
-app.listen(PORT, () => {
-  console.log(`Drawing recognition engine listening on http://localhost:${PORT}`)
-})
+// Vercel's Node runtime imports this module for its (req, res) handler and
+// never calls listen() itself — only bind a real port for local dev.
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Drawing recognition engine listening on http://localhost:${PORT}`)
+  })
+}
+
+export default app

@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import path from 'node:path'
+import { query, queryOne } from '../configurator/db.js'
 
 export interface RateMaster {
   currency: string
@@ -18,9 +17,6 @@ export interface RateMaster {
   marginPercent: number
 }
 
-const DATA_DIR = path.resolve(import.meta.dirname, '../../data')
-const RATE_FILE = path.join(DATA_DIR, 'rate-master.json')
-
 const DEFAULTS: RateMaster = {
   currency: 'INR',
   profileRatePerKg: 320,
@@ -38,21 +34,21 @@ const DEFAULTS: RateMaster = {
   marginPercent: 18,
 }
 
+// Single-row settings blob — was backend/data/rate-master.json, now one
+// jsonb row in Postgres (id is always 1, a singleton table) since that file
+// didn't survive Vercel's ephemeral filesystem either. Already seeded via
+// migrations/002_seed.sql; getRateMaster's insert-if-missing branch is only
+// a safety net for a database that somehow doesn't have it yet.
 export async function getRateMaster(): Promise<RateMaster> {
-  await mkdir(DATA_DIR, { recursive: true })
-  try {
-    const raw = await readFile(RATE_FILE, 'utf-8')
-    return { ...DEFAULTS, ...JSON.parse(raw) }
-  } catch {
-    await writeFile(RATE_FILE, JSON.stringify(DEFAULTS, null, 2), 'utf-8')
-    return DEFAULTS
-  }
+  const row = await queryOne<{ data: RateMaster }>('SELECT data FROM rate_master WHERE id = 1')
+  if (row) return { ...DEFAULTS, ...row.data }
+  await query('INSERT INTO rate_master (id, data) VALUES (1, $1)', [JSON.stringify(DEFAULTS)])
+  return DEFAULTS
 }
 
 export async function saveRateMaster(patch: Partial<RateMaster>): Promise<RateMaster> {
   const current = await getRateMaster()
   const updated = { ...current, ...patch }
-  await mkdir(DATA_DIR, { recursive: true })
-  await writeFile(RATE_FILE, JSON.stringify(updated, null, 2), 'utf-8')
+  await query('UPDATE rate_master SET data = $1 WHERE id = 1', [JSON.stringify(updated)])
   return updated
 }

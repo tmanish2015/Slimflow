@@ -1,4 +1,4 @@
-import { db } from './db.js'
+import { query } from './db.js'
 
 export interface CompatibilityRuleRow {
   id: number
@@ -37,12 +37,15 @@ export type Selection = Partial<Record<string, number | null>>
  *   `requires` rows at all has no requirement — it's allowed by default,
  *   subject only to `excludes`.
  */
-export function evaluateCompatibility(subjectTable: string, subjectId: number, selection: Selection): CompatibilityResult {
-  const rules = db
-    .prepare(
-      `SELECT * FROM compatibility_rules WHERE subject_table = ? AND subject_id = ? AND active = 1`,
-    )
-    .all(subjectTable, subjectId) as unknown as CompatibilityRuleRow[]
+export async function evaluateCompatibility(
+  subjectTable: string,
+  subjectId: number,
+  selection: Selection,
+): Promise<CompatibilityResult> {
+  const rules = await query<CompatibilityRuleRow>(
+    `SELECT * FROM compatibility_rules WHERE subject_table = $1 AND subject_id = $2 AND active = 1`,
+    [subjectTable, subjectId],
+  )
 
   const reasons: string[] = []
 
@@ -77,10 +80,10 @@ export function evaluateCompatibility(subjectTable: string, subjectId: number, s
 /** Evaluates every row of `table` against the given selection — used to
  * render a "these are your compatible options" list rather than checking
  * one subject at a time. */
-export function filterCompatible<T extends { id: number; name: string }>(
+export async function filterCompatible<T extends { id: number; name: string }>(
   table: string,
   selection: Selection,
-): (T & { allowed: boolean; reasons: string[] })[] {
-  const rows = db.prepare(`SELECT * FROM ${table}`).all() as unknown as T[]
-  return rows.map((row) => ({ ...row, ...evaluateCompatibility(table, row.id, selection) }))
+): Promise<(T & { allowed: boolean; reasons: string[] })[]> {
+  const rows = await query<T>(`SELECT * FROM ${table}`)
+  return Promise.all(rows.map(async (row) => ({ ...row, ...(await evaluateCompatibility(table, row.id, selection)) })))
 }

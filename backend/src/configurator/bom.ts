@@ -1,4 +1,4 @@
-import { db } from './db.js'
+import { query, queryOne } from './db.js'
 import type {
   AccessoryMaster,
   ConfigurationBomLine,
@@ -12,24 +12,18 @@ import type {
 
 const SQM_PER_SQFT = 0.092903
 
-export function getPricingRules(): PricingRules {
-  return db.prepare('SELECT * FROM pricing_rules ORDER BY id LIMIT 1').get() as unknown as PricingRules
+export async function getPricingRules(): Promise<PricingRules> {
+  const row = await queryOne<PricingRules>('SELECT * FROM pricing_rules ORDER BY id LIMIT 1')
+  if (!row) throw new Error('pricing_rules table is empty')
+  return row
 }
 
-export function getDefaultSeal(): SealMaster | null {
-  return (
-    (db.prepare('SELECT * FROM seal_master ORDER BY rate_per_metre ASC LIMIT 1').get() as unknown as
-      | SealMaster
-      | undefined) ?? null
-  )
+export async function getDefaultSeal(): Promise<SealMaster | null> {
+  return (await queryOne<SealMaster>('SELECT * FROM seal_master ORDER BY rate_per_metre ASC LIMIT 1')) ?? null
 }
 
-export function getDefaultTape(): TapeMaster | null {
-  return (
-    (db.prepare('SELECT * FROM tape_master ORDER BY rate_per_sqft ASC LIMIT 1').get() as unknown as
-      | TapeMaster
-      | undefined) ?? null
-  )
+export async function getDefaultTape(): Promise<TapeMaster | null> {
+  return (await queryOne<TapeMaster>('SELECT * FROM tape_master ORDER BY rate_per_sqft ASC LIMIT 1')) ?? null
 }
 
 /**
@@ -39,12 +33,11 @@ export function getDefaultTape(): TapeMaster | null {
  * read from the profile lines already computed, not a separate parts list
  * that could drift out of sync with what Step 4 actually calculated.
  */
-export function computeConnectorLines(profileLines: ConfigurationProfileLine[]): ConfigurationBomLine[] {
+export async function computeConnectorLines(profileLines: ConfigurationProfileLine[]): Promise<ConfigurationBomLine[]> {
   const lines: ConfigurationBomLine[] = []
-  const byName = (name: string) =>
-    db.prepare('SELECT * FROM connector_master WHERE name = ?').get(name) as unknown as ConnectorMaster | undefined
+  const byName = (name: string) => queryOne<ConnectorMaster>('SELECT * FROM connector_master WHERE name = $1', [name])
 
-  const corner = byName('Corner Connector')
+  const corner = await byName('Corner Connector')
   if (corner) {
     lines.push({
       category: 'Connector',
@@ -58,7 +51,7 @@ export function computeConnectorLines(profileLines: ConfigurationProfileLine[]):
   }
 
   const centreDivider = profileLines.find((l) => l.role_name === 'Centre Divider')
-  const divider = byName('Divider Connector')
+  const divider = await byName('Divider Connector')
   if (centreDivider && centreDivider.quantity > 0 && divider) {
     const qty = centreDivider.quantity * 2
     lines.push({
@@ -73,7 +66,7 @@ export function computeConnectorLines(profileLines: ConfigurationProfileLine[]):
   }
 
   const horizontalDivider = profileLines.find((l) => l.role_name === 'Horizontal Divider')
-  const tConnector = byName('T Connector')
+  const tConnector = await byName('T Connector')
   if (horizontalDivider && horizontalDivider.quantity > 0 && tConnector) {
     const qty = horizontalDivider.quantity * 2
     lines.push({
@@ -146,8 +139,8 @@ const DEFAULT_ACCESSORY_QTY: Record<string, number> = {
   'Silicone Sealant Tube': 1,
 }
 
-export function computeAccessoryLines(): ConfigurationBomLine[] {
-  const rows = db.prepare('SELECT * FROM accessory_master').all() as unknown as AccessoryMaster[]
+export async function computeAccessoryLines(): Promise<ConfigurationBomLine[]> {
+  const rows = await query<AccessoryMaster>('SELECT * FROM accessory_master')
   return rows.map((row) => {
     const qty = DEFAULT_ACCESSORY_QTY[row.name] ?? 1
     return {

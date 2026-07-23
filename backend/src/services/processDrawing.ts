@@ -1,6 +1,5 @@
-import { readFile, writeFile } from 'node:fs/promises'
-import path from 'node:path'
-import { PROCESSED_DIR, updateDrawing, type DrawingRecord } from '../store.js'
+import { updateDrawing, type DrawingRecord } from '../store.js'
+import { downloadFromStorage, uploadToStorage, PROCESSED_BUCKET, UPLOAD_BUCKET } from '../storage.js'
 import { preprocessForOcr } from './preprocess.js'
 import { extractVectorText, rasterizePdfPage } from './pdf.js'
 import { runOcr } from './ocr.js'
@@ -12,7 +11,7 @@ export async function processDrawing(drawing: DrawingRecord): Promise<void> {
   await updateDrawing(drawing.id, { status: 'processing', errorMessage: null })
 
   try {
-    const fileBuffer = await readFile(drawing.storedPath)
+    const fileBuffer = await downloadFromStorage(UPLOAD_BUCKET, drawing.storedPath)
     const isPdf = drawing.mimeType === 'application/pdf'
 
     let tokens: RawToken[] = []
@@ -42,8 +41,8 @@ export async function processDrawing(drawing: DrawingRecord): Promise<void> {
       source = 'ocr'
     }
 
-    const previewPath = path.join(PROCESSED_DIR, `${drawing.id}.png`)
-    await writeFile(previewPath, previewBuffer)
+    const previewPath = `${drawing.id}.png`
+    await uploadToStorage(PROCESSED_BUCKET, previewPath, previewBuffer, 'image/png')
 
     const dimensions = parseDimensions(tokens, source)
     const hasAnyDimension = dimensions.some((d) => d.kind === 'width' || d.kind === 'height')

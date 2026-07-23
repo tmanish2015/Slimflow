@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import path from 'node:path'
+import { query, queryOne } from './configurator/db.js'
 
 export type DimensionKind =
   | 'width'
@@ -96,55 +95,18 @@ export interface DrawingRecord {
   updatedAt: string
 }
 
-const DATA_DIR = path.resolve(import.meta.dirname, '../data')
-const DB_FILE = path.join(DATA_DIR, 'drawings.json')
-export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads')
-export const PROCESSED_DIR = path.join(DATA_DIR, 'processed')
-
-interface DbShape {
-  drawings: Record<string, DrawingRecord>
-}
-
-let cache: DbShape | null = null
-
-async function ensureDirs() {
-  await mkdir(DATA_DIR, { recursive: true })
-  await mkdir(UPLOAD_DIR, { recursive: true })
-  await mkdir(PROCESSED_DIR, { recursive: true })
-}
-
-async function load(): Promise<DbShape> {
-  if (cache) return cache
-  await ensureDirs()
-  try {
-    const raw = await readFile(DB_FILE, 'utf-8')
-    cache = JSON.parse(raw) as DbShape
-    // Records persisted before `features`/`panelMaterial` existed won't have
-    // them — backfill so every consumer can rely on both always being
-    // defined (an earlier version of this same mistake, with `features`,
-    // crashed the whole process on first read — see routes/drawings.ts).
-    for (const drawing of Object.values(cache.drawings)) {
-      drawing.features ??= []
-      drawing.panelMaterial ??= 'glass'
-      drawing.hardwareItems ??= []
-    }
-  } catch {
-    cache = { drawings: {} }
-  }
-  return cache
-}
-
-async function persist() {
-  if (!cache) return
-  await writeFile(DB_FILE, JSON.stringify(cache, null, 2), 'utf-8')
-}
-
+// Drawings live in Postgres now (one jsonb column per row) instead of a
+// single backend/data/drawings.json blob file — that file didn't survive
+// Vercel's ephemeral filesystem. Kept as one jsonb column rather than fully
+// normalized: the shape is still evolving and the app already treats it as
+// one nested object end-to-end — jsonb preserves that exactly. `created_at`
+// is pulled out as its own real column purely so listDrawings can ORDER BY
+// at the DB level.
 export async function createDrawing(input: {
   originalFilename: string
   mimeType: string
   storedPath: string
 }): Promise<DrawingRecord> {
-  const db = await load()
   const now = new Date().toISOString()
   const record: DrawingRecord = {
     id: randomUUID(),
@@ -164,34 +126,35 @@ export async function createDrawing(input: {
     createdAt: now,
     updatedAt: now,
   }
-  db.drawings[record.id] = record
-  await persist()
+  await query('INSERT INTO drawings (id, data, created_at) VALUES ($1, $2, $3)', [
+    record.id,
+    JSON.stringify(record),
+    now,
+  ])
   return record
 }
 
 export async function getDrawing(id: string): Promise<DrawingRecord | undefined> {
-  const db = await load()
-  return db.drawings[id]
+  const row = await queryOne<{ data: DrawingRecord }>('SELECT data FROM drawings WHERE id = $1', [id])
+  return row?.data
 }
 
 export async function listDrawings(): Promise<DrawingRecord[]> {
-  const db = await load()
-  return Object.values(db.drawings).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const rows = await query<{ data: DrawingRecord }>('SELECT data FROM drawings ORDER BY created_at DESC')
+  return rows.map((r) => r.data)
 }
 
 export async function updateDrawing(
   id: string,
   patch: Partial<Omit<DrawingRecord, 'id' | 'createdAt'>>,
 ): Promise<DrawingRecord> {
-  const db = await load()
-  const existing = db.drawings[id]
+  const existing = await getDrawing(id)
   if (!existing) throw new Error(`Drawing ${id} not found`)
   const updated: DrawingRecord = {
     ...existing,
     ...patch,
     updatedAt: new Date().toISOString(),
   }
-  db.drawings[id] = updated
-  await persist()
+  await query('UPDATE drawings SET data = $1 WHERE id = $2', [JSON.stringify(updated), id])
   return updated
 }
