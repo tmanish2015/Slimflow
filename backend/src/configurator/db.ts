@@ -53,6 +53,11 @@ addColumnIfMissing('configurations', 'recommended_floor_spring_id', 'INTEGER REF
 addColumnIfMissing('configurations', 'recommended_handle_id', 'INTEGER REFERENCES handle_master(id)')
 addColumnIfMissing('configurations', 'recommended_lock_id', 'INTEGER REFERENCES lock_master(id)')
 addColumnIfMissing('configurations', 'recommended_hardware_set_id', 'INTEGER REFERENCES hardware_set_master(id)')
+
+// group_id starts nullable here (existing rows have nothing to point at yet
+// — finish_price_groups is seeded, and this column backfilled from the old
+// price_multiplier values, in seed.ts once the group rows exist).
+addColumnIfMissing('profile_finishes', 'group_id', 'INTEGER REFERENCES finish_price_groups(id)')
 addColumnIfMissing('configurations', 'material_cost', 'REAL')
 addColumnIfMissing('configurations', 'waste_cost', 'REAL')
 addColumnIfMissing('configurations', 'total_cost', 'REAL')

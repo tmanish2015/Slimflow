@@ -11,6 +11,7 @@ const ADMIN_TABLES = [
   'system_types',
   'door_architectures',
   'panel_configurations',
+  'finish_price_groups',
   'profile_finishes',
   'profile_series',
   'profile_roles',

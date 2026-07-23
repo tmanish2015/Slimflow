@@ -19,6 +19,8 @@ export function seedIfEmpty() {
     if (floorSpringCount.n === 0) seedFloorSpringsAndPricing()
     const hardwareSetCount = db.prepare('SELECT COUNT(*) as n FROM hardware_set_master').get() as { n: number }
     if (hardwareSetCount.n === 0) seedHardwareSets()
+    const groupCount = db.prepare('SELECT COUNT(*) as n FROM finish_price_groups').get() as { n: number }
+    if (groupCount.n === 0) migrateFinishesToPriceGroups()
     return
   }
 
@@ -74,16 +76,29 @@ export function seedIfEmpty() {
     ],
   )
 
-  insertMany('INSERT INTO profile_finishes (name, price_multiplier, swatch_hex) VALUES (?, ?, ?)', [
-    ['Black', 1.0, '#1a1a1a'],
-    ['Brush Gold', 1.15, '#b08d57'],
-    ['Rose Gold', 1.15, '#b76e79'],
-    ['Grey', 1.0, '#808080'],
-    ['Champagne', 1.1, '#d4b896'],
-    ['Silver', 1.0, '#c0c0c0'],
-    ['White', 1.0, '#ffffff'],
-    ['Wood Finish', 1.25, '#8b5a2b'],
-    ['Custom RAL', 1.2, '#888888'],
+  // RAL colours are priced by tier, not per-swatch — same multipliers as
+  // before, just grouped so an admin can reprice a whole tier (e.g. "all
+  // metallics") in one edit instead of hunting down every matching finish.
+  insertMany('INSERT INTO finish_price_groups (name, multiplier) VALUES (?, ?)', [
+    ['Standard RAL', 1.0],
+    ['Designer RAL', 1.1],
+    ['Metallic RAL', 1.15],
+    ['Bespoke RAL', 1.2],
+    ['Textured/Wood RAL', 1.25],
+  ])
+  const groupId = (name: string): number =>
+    (db.prepare('SELECT id FROM finish_price_groups WHERE name = ?').get(name) as { id: number }).id
+
+  insertMany('INSERT INTO profile_finishes (name, group_id, swatch_hex) VALUES (?, ?, ?)', [
+    ['Black', groupId('Standard RAL'), '#1a1a1a'],
+    ['Brush Gold', groupId('Metallic RAL'), '#b08d57'],
+    ['Rose Gold', groupId('Metallic RAL'), '#b76e79'],
+    ['Grey', groupId('Standard RAL'), '#808080'],
+    ['Champagne', groupId('Designer RAL'), '#d4b896'],
+    ['Silver', groupId('Standard RAL'), '#c0c0c0'],
+    ['White', groupId('Standard RAL'), '#ffffff'],
+    ['Wood Finish', groupId('Textured/Wood RAL'), '#8b5a2b'],
+    ['Custom RAL', groupId('Bespoke RAL'), '#888888'],
   ])
 
   insertMany('INSERT INTO profile_series (name, system_type_id, description) VALUES (?, ?, ?)', [
@@ -302,6 +317,45 @@ function seedFloorSpringsAndPricing() {
   )
   insertRule.run(5, 0, null, 1, 1) // Pivot, default -> Floor Pivot
   insertRule.run(5, 60, null, 2, 5) // Pivot, heavy -> Hydraulic Floor Spring
+}
+
+// One-time migration for a dev DB seeded before finish_price_groups existed:
+// seed the same 5 tiers used in the fresh-install path, backfill each
+// existing finish's group_id from its old price_multiplier (matched to the
+// group with the closest multiplier — exact, since the tiers mirror the old
+// per-row values), then drop the now-redundant column so group_id is the
+// only source of truth going forward.
+function migrateFinishesToPriceGroups() {
+  const insertGroup = db.prepare('INSERT INTO finish_price_groups (name, multiplier) VALUES (?, ?)')
+  for (const [name, multiplier] of [
+    ['Standard RAL', 1.0],
+    ['Designer RAL', 1.1],
+    ['Metallic RAL', 1.15],
+    ['Bespoke RAL', 1.2],
+    ['Textured/Wood RAL', 1.25],
+  ] as const) {
+    insertGroup.run(name, multiplier)
+  }
+
+  const columns = db.prepare('PRAGMA table_info(profile_finishes)').all() as { name: string }[]
+  if (!columns.some((c) => c.name === 'price_multiplier')) return
+
+  const finishes = db.prepare('SELECT id, price_multiplier FROM profile_finishes').all() as {
+    id: number
+    price_multiplier: number
+  }[]
+  const groups = db.prepare('SELECT id, multiplier FROM finish_price_groups').all() as {
+    id: number
+    multiplier: number
+  }[]
+  const updateGroup = db.prepare('UPDATE profile_finishes SET group_id = ? WHERE id = ?')
+  for (const finish of finishes) {
+    const closest = groups.reduce((best, g) =>
+      Math.abs(g.multiplier - finish.price_multiplier) < Math.abs(best.multiplier - finish.price_multiplier) ? g : best,
+    )
+    updateGroup.run(closest.id, finish.id)
+  }
+  db.exec('ALTER TABLE profile_finishes DROP COLUMN price_multiplier')
 }
 
 // OEM-style bundled hardware kits (hinge+floor-spring+handle+lock priced as

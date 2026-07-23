@@ -21,10 +21,16 @@ export interface PanelConfiguration {
   is_heavy_duty: number
 }
 
+export interface FinishPriceGroup {
+  id: number
+  name: string
+  multiplier: number
+}
+
 export interface ProfileFinish {
   id: number
   name: string
-  price_multiplier: number
+  group_id: number
   swatch_hex: string
 }
 

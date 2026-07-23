@@ -26,7 +26,7 @@ export interface PanelConfiguration {
 export interface ProfileFinish {
   id: number
   name: string
-  price_multiplier: number
+  group_id: number
   swatch_hex: string
 }
 

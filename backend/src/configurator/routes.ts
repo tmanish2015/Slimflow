@@ -31,6 +31,7 @@ import type {
   ConfigurationBomLine,
   ConfigurationResult,
   DoorArchitecture,
+  FinishPriceGroup,
   FloorSpringMaster,
   GlassMaster,
   HandleMaster,
@@ -113,6 +114,11 @@ function buildConfiguration(id: string, input: z.infer<typeof createConfiguratio
     | undefined
   if (!finish) throw new Error('Unknown finish')
 
+  const finishGroup = db.prepare('SELECT * FROM finish_price_groups WHERE id = ?').get(finish.group_id) as
+    | FinishPriceGroup
+    | undefined
+  if (!finishGroup) throw new Error('Finish has no price group')
+
   const architecture = db
     .prepare('SELECT * FROM door_architectures WHERE id = ?')
     .get(input.doorArchitectureId) as DoorArchitecture | undefined
@@ -127,7 +133,7 @@ function buildConfiguration(id: string, input: z.infer<typeof createConfiguratio
     panelConfig,
     input.widthMm,
     input.heightMm,
-    finish.price_multiplier,
+    finishGroup.multiplier,
   )
   if (profileLines.length === 0) {
     throw new Error('Selected profile series has no profiles configured for its roles')

@@ -39,10 +39,19 @@ CREATE TABLE IF NOT EXISTS panel_configurations (
   is_heavy_duty INTEGER NOT NULL DEFAULT 0
 );
 
+-- RAL colours are priced by tier (Standard/Metallic/Textured/Custom), not
+-- individually — an admin repricing "all metallics" edits one group row
+-- instead of hunting down every finish that happens to be metallic.
+CREATE TABLE IF NOT EXISTS finish_price_groups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT UNIQUE NOT NULL,
+  multiplier REAL NOT NULL DEFAULT 1.0
+);
+
 CREATE TABLE IF NOT EXISTS profile_finishes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT UNIQUE NOT NULL,
-  price_multiplier REAL NOT NULL DEFAULT 1.0,
+  group_id INTEGER NOT NULL REFERENCES finish_price_groups(id),
   swatch_hex TEXT NOT NULL DEFAULT '#888888'
 );
 
