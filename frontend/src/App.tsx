@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
-import { Moon, Sun } from 'lucide-react'
+import { LogOut, Moon, Sun } from 'lucide-react'
 import { UploadPage } from '~/pages/UploadPage'
 import { ReviewPage } from '~/pages/ReviewPage'
 import { RatesPage } from '~/pages/RatesPage'
 import { ConfiguratorPage } from '~/pages/ConfiguratorPage'
 import { AdminPage } from '~/pages/AdminPage'
 import { DashboardPage } from '~/pages/DashboardPage'
+import { LoginPage } from '~/pages/LoginPage'
 import { Button } from '~/components/ui/button'
+import { authApi } from '~/lib/authApi'
 import { cn } from '~/lib/utils'
 
 const NAV_ITEMS = [
@@ -48,7 +50,34 @@ function ThemeToggle() {
   )
 }
 
+function LogoutButton({ onLoggedOut }: { onLoggedOut: () => void }) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label="Sign out"
+      onClick={() => authApi.logout().then(onLoggedOut)}
+    >
+      <LogOut className="size-4" />
+    </Button>
+  )
+}
+
 export default function App() {
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    authApi.me().then((r) => setAuthenticated(r.authenticated))
+  }, [])
+
+  if (authenticated === null) {
+    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+  }
+
+  if (!authenticated) {
+    return <LoginPage onLoggedIn={() => setAuthenticated(true)} />
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b bg-card print:hidden">
@@ -61,6 +90,7 @@ export default function App() {
               <NavLink key={item.to} {...item} />
             ))}
             <ThemeToggle />
+            <LogoutButton onLoggedOut={() => setAuthenticated(false)} />
           </nav>
         </div>
       </header>
