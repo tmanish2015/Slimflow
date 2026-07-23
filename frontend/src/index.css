@@ -128,3 +128,22 @@
     @apply font-sans;
     }
 }
+
+/* Printed BOMs should always come out light/ink-friendly, regardless of
+   whether the user has dark mode toggled on — reset .dark back to the same
+   values as :root for the duration of the print. */
+@media print {
+  .dark {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --border: oklch(0.922 0 0);
+  }
+}

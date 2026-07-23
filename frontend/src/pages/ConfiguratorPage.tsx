@@ -6,7 +6,7 @@ import {
   type ConfigurationResult,
   type ReferenceData,
 } from '~/lib/configuratorApi'
-import { Download } from 'lucide-react'
+import { Download, Printer } from 'lucide-react'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { exportBomToExcel } from '~/lib/exportBom'
 import { Button } from '~/components/ui/button'
@@ -90,7 +90,7 @@ export function ConfiguratorPage() {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-      <div>
+      <div className="print:hidden">
         <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
           ← Back
         </Link>
@@ -101,7 +101,7 @@ export function ConfiguratorPage() {
         </p>
       </div>
 
-      <Card>
+      <Card className="print:hidden">
         <CardHeader>
           <CardTitle>1. System &amp; architecture</CardTitle>
         </CardHeader>
@@ -162,7 +162,7 @@ export function ConfiguratorPage() {
       </Card>
 
       {(locks.length > 0 || handles.length > 0) && (
-        <Card>
+        <Card className="print:hidden">
           <CardHeader>
             <CardTitle>Compatible hardware (live, Step 17)</CardTitle>
           </CardHeader>
@@ -205,7 +205,7 @@ export function ConfiguratorPage() {
         </Card>
       )}
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 print:hidden">
         <Button onClick={submit} disabled={!canSubmit || submitting}>
           {submitting ? 'Configuring…' : 'Configure'}
         </Button>
@@ -331,7 +331,11 @@ export function ConfiguratorPage() {
           <Card>
             <CardHeader>
               <CardTitle>Complete BOM (Step 16)</CardTitle>
-              <CardAction>
+              <CardAction className="flex gap-2 print:hidden">
+                <Button variant="outline" size="sm" onClick={() => window.print()}>
+                  <Printer className="size-3.5" />
+                  Print
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => exportBomToExcel(result)}>
                   <Download className="size-3.5" />
                   Export Excel
