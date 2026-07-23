@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { UploadCloud, Camera } from 'lucide-react'
 import { api, type DrawingRecord } from '~/lib/api'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent } from '~/components/ui/card'
 import { Badge } from '~/components/ui/badge'
+import { cn } from '~/lib/utils'
 
 const STATUS_VARIANT: Record<DrawingRecord['status'], 'outline' | 'warning' | 'success' | 'destructive'> = {
   uploaded: 'outline',
@@ -43,12 +45,10 @@ export function UploadPage() {
   )
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
+    <div className="mx-auto flex max-w-3xl flex-col gap-8 p-6 pt-10">
       <div>
-        <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
-          Drawing Recognition Engine
-        </h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <h1 className="text-2xl font-semibold tracking-tight">Drawing Recognition Engine</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
           Upload a dimensioned drawing (PDF, JPG, PNG, TIFF) or take a photo. We&apos;ll extract
           dimensions automatically — you confirm before it feeds the BOM.
         </p>
@@ -66,21 +66,19 @@ export function UploadPage() {
           const file = e.dataTransfer.files[0]
           if (file) void handleFile(file)
         }}
-        className={`flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-12 text-center transition-colors ${
-          isDragging
-            ? 'border-neutral-900 bg-neutral-50 dark:border-neutral-100 dark:bg-neutral-800'
-            : 'border-neutral-300 dark:border-neutral-700'
-        }`}
+        className={cn(
+          'flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed p-14 text-center transition-colors',
+          isDragging ? 'border-foreground/40 bg-muted/50' : 'border-border',
+        )}
       >
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          Drag &amp; drop a drawing here, or
-        </p>
+        <UploadCloud className="size-9 text-muted-foreground" strokeWidth={1.5} />
+        <p className="text-sm text-muted-foreground">Drag &amp; drop a drawing here, or</p>
         <div className="flex gap-2">
           <Button onClick={() => inputRef.current?.click()} disabled={isUploading}>
             {isUploading ? 'Uploading…' : 'Choose file'}
           </Button>
           <Button variant="outline" onClick={() => cameraInputRef.current?.click()} disabled={isUploading}>
-            Take photo
+            <Camera className="size-4" /> Take photo
           </Button>
         </div>
         <input
@@ -104,25 +102,22 @@ export function UploadPage() {
             if (file) void handleFile(file)
           }}
         />
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
 
       {recent.length > 0 && (
         <div>
-          <h2 className="mb-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
-            Recent uploads
-          </h2>
+          <h2 className="mb-2 text-sm font-medium text-muted-foreground">Recent uploads</h2>
           <div className="flex flex-col gap-2">
             {recent.map((d) => (
               <Card
                 key={d.id}
-                className="cursor-pointer hover:border-neutral-400 dark:hover:border-neutral-600"
+                size="sm"
+                className="cursor-pointer transition-colors hover:ring-foreground/20"
                 onClick={() => navigate(`/drawings/${d.id}`)}
               >
-                <CardContent className="flex items-center justify-between p-3">
-                  <span className="truncate text-sm text-neutral-800 dark:text-neutral-200">
-                    {d.originalFilename}
-                  </span>
+                <CardContent className="flex items-center justify-between">
+                  <span className="truncate text-sm">{d.originalFilename}</span>
                   <Badge variant={STATUS_VARIANT[d.status]}>{d.status.replace('_', ' ')}</Badge>
                 </CardContent>
               </Card>

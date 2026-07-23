@@ -1,28 +1,45 @@
-import { Routes, Route, Link } from 'react-router-dom'
+import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import { UploadPage } from '~/pages/UploadPage'
 import { ReviewPage } from '~/pages/ReviewPage'
 import { RatesPage } from '~/pages/RatesPage'
 import { ConfiguratorPage } from '~/pages/ConfiguratorPage'
 import { AdminPage } from '~/pages/AdminPage'
+import { cn } from '~/lib/utils'
+
+const NAV_ITEMS = [
+  { to: '/configurator', label: 'Configurator' },
+  { to: '/admin', label: 'Admin' },
+  { to: '/rates', label: 'Rate master' },
+]
+
+function NavLink({ to, label }: { to: string; label: string }) {
+  const location = useLocation()
+  const active = location.pathname === to || (to !== '/' && location.pathname.startsWith(to))
+  return (
+    <Link
+      to={to}
+      className={cn(
+        'text-sm transition-colors',
+        active ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
+      )}
+    >
+      {label}
+    </Link>
+  )
+}
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
-      <header className="border-b border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
-          <Link to="/" className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-            Slimflow Drawing Engine
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b bg-card">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+          <Link to="/" className="text-sm font-semibold tracking-tight">
+            Slimflow
           </Link>
-          <nav className="flex items-center gap-4">
-            <Link to="/configurator" className="text-sm text-neutral-500 hover:underline">
-              Configurator
-            </Link>
-            <Link to="/admin" className="text-sm text-neutral-500 hover:underline">
-              Admin
-            </Link>
-            <Link to="/rates" className="text-sm text-neutral-500 hover:underline">
-              Rate master
-            </Link>
+          <nav className="flex items-center gap-6">
+            {NAV_ITEMS.map((item) => (
+              <NavLink key={item.to} {...item} />
+            ))}
           </nav>
         </div>
       </header>

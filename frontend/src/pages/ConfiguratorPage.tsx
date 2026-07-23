@@ -9,36 +9,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
+import { Label } from '~/components/ui/label'
 import { Badge } from '~/components/ui/badge'
-
-function Select<T extends { id: number }>({
-  value,
-  onChange,
-  options,
-  labelKey = 'name' as keyof T,
-}: {
-  value: number | ''
-  onChange: (v: number) => void
-  options: T[]
-  labelKey?: keyof T
-}) {
-  return (
-    <select
-      className="h-9 w-full rounded border border-neutral-300 bg-white px-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-    >
-      <option value="" disabled>
-        Select…
-      </option>
-      {options.map((o) => (
-        <option key={o.id} value={o.id}>
-          {String(o[labelKey])}
-        </option>
-      ))}
-    </select>
-  )
-}
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
+import { IdSelect } from '~/components/id-select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 
 export function ConfiguratorPage() {
   const [reference, setReference] = useState<ReferenceData | null>(null)
@@ -74,7 +49,7 @@ export function ConfiguratorPage() {
     configuratorApi.getCompatibility({ table: 'handle_master', ...query }).then(setHandles)
   }, [systemTypeId, doorArchitectureId, panelConfigurationId, profileSeriesId, finishId, glassId])
 
-  if (!reference) return <div className="p-6 text-sm text-neutral-500">Loading…</div>
+  if (!reference) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
 
   const selectedArchitecture = reference.doorArchitectures.find((a) => a.id === doorArchitectureId)
 
@@ -114,13 +89,11 @@ export function ConfiguratorPage() {
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
       <div>
-        <Link to="/" className="text-sm text-neutral-500 hover:underline">
+        <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
           ← Back
         </Link>
-        <h1 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-          Aluminium System Configurator
-        </h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <h1 className="text-lg font-semibold tracking-tight">Aluminium System Configurator</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Pick a system — Track/Frame/Hinge selection and profile quantities are computed
           automatically from database-driven rules, not hardcoded.
         </p>
@@ -131,58 +104,58 @@ export function ConfiguratorPage() {
           <CardTitle>1. System &amp; architecture</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <label className="flex flex-col gap-1 text-sm">
-            System Type
-            <Select value={systemTypeId} onChange={setSystemTypeId} options={reference.systemTypes} />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Door Architecture
-            <Select
-              value={doorArchitectureId}
-              onChange={setDoorArchitectureId}
-              options={reference.doorArchitectures}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Panel Configuration
-            <Select
+          <div className="flex flex-col gap-1.5">
+            <Label>System Type</Label>
+            <IdSelect value={systemTypeId} onChange={setSystemTypeId} options={reference.systemTypes} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Door Architecture</Label>
+            <IdSelect value={doorArchitectureId} onChange={setDoorArchitectureId} options={reference.doorArchitectures} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Panel Configuration</Label>
+            <IdSelect
               value={panelConfigurationId}
               onChange={setPanelConfigurationId}
               options={reference.panelConfigurations}
               labelKey="label"
             />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Profile Series
-            <Select value={profileSeriesId} onChange={setProfileSeriesId} options={reference.profileSeries} />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Finish
-            <Select value={finishId} onChange={setFinishId} options={reference.profileFinishes} />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Glass (optional)
-            <select
-              className="h-9 w-full rounded border border-neutral-300 bg-white px-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-              value={glassId}
-              onChange={(e) => setGlassId(e.target.value === '' ? '' : Number(e.target.value))}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Profile Series</Label>
+            <IdSelect value={profileSeriesId} onChange={setProfileSeriesId} options={reference.profileSeries} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Finish</Label>
+            <IdSelect value={finishId} onChange={setFinishId} options={reference.profileFinishes} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Glass (optional)</Label>
+            <Select
+              items={Object.fromEntries(reference.glassOptions.map((g) => [String(g.id), g.name]))}
+              value={String(glassId)}
+              onValueChange={(v) => setGlassId(v ? Number(v) : '')}
             >
-              <option value="">None</option>
-              {reference.glassOptions.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Width (mm)
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="None" />
+              </SelectTrigger>
+              <SelectContent>
+                {reference.glassOptions.map((g) => (
+                  <SelectItem key={g.id} value={String(g.id)}>
+                    {g.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Width (mm)</Label>
             <Input type="number" value={widthMm} onChange={(e) => setWidthMm(Number(e.target.value) || 0)} />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Height (mm)
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Height (mm)</Label>
             <Input type="number" value={heightMm} onChange={(e) => setHeightMm(Number(e.target.value) || 0)} />
-          </label>
+          </div>
         </CardContent>
       </Card>
 
@@ -193,15 +166,15 @@ export function ConfiguratorPage() {
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <div className="mb-1 text-xs font-medium text-neutral-500">Locks</div>
+              <div className="mb-1 text-xs font-medium text-muted-foreground">Locks</div>
               <div className="flex flex-col gap-1">
                 {locks.map((l) => (
                   <div key={l.id} className="flex items-center justify-between gap-2 text-sm">
-                    <span className={l.allowed ? '' : 'text-neutral-400 line-through'}>{l.name}</span>
+                    <span className={l.allowed ? '' : 'text-muted-foreground line-through'}>{l.name}</span>
                     {l.allowed ? (
                       <Badge variant="success">allowed</Badge>
                     ) : (
-                      <span className="text-xs text-red-500" title={l.reasons.join('; ')}>
+                      <span className="text-xs text-destructive" title={l.reasons.join('; ')}>
                         {l.reasons[0]}
                       </span>
                     )}
@@ -210,15 +183,15 @@ export function ConfiguratorPage() {
               </div>
             </div>
             <div>
-              <div className="mb-1 text-xs font-medium text-neutral-500">Handles</div>
+              <div className="mb-1 text-xs font-medium text-muted-foreground">Handles</div>
               <div className="flex flex-col gap-1">
                 {handles.map((h) => (
                   <div key={h.id} className="flex items-center justify-between gap-2 text-sm">
-                    <span className={h.allowed ? '' : 'text-neutral-400 line-through'}>{h.name}</span>
+                    <span className={h.allowed ? '' : 'text-muted-foreground line-through'}>{h.name}</span>
                     {h.allowed ? (
                       <Badge variant="success">allowed</Badge>
                     ) : (
-                      <span className="text-xs text-red-500" title={h.reasons.join('; ')}>
+                      <span className="text-xs text-destructive" title={h.reasons.join('; ')}>
                         {h.reasons[0]}
                       </span>
                     )}
@@ -234,7 +207,7 @@ export function ConfiguratorPage() {
         <Button onClick={submit} disabled={!canSubmit || submitting}>
           {submitting ? 'Configuring…' : 'Configure'}
         </Button>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
 
       {result && (
@@ -245,71 +218,71 @@ export function ConfiguratorPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-4">
               <div>
-                <div className="text-xs text-neutral-500">Estimated door weight</div>
+                <div className="text-xs text-muted-foreground">Estimated door weight</div>
                 <div className="text-lg font-semibold">{result.estimatedDoorWeightKg} kg</div>
               </div>
               <div>
-                <div className="text-xs text-neutral-500">Track</div>
+                <div className="text-xs text-muted-foreground">Track</div>
                 {result.recommendedTrack ? (
                   <div className="text-sm font-medium">
                     {result.recommendedTrack.name}{' '}
-                    <span className="text-xs text-neutral-400">
+                    <span className="text-xs text-muted-foreground">
                       (cap {String(result.recommendedTrack.max_capacity_kg)}kg)
                     </span>
                   </div>
                 ) : (
-                  <div className="text-sm text-neutral-400">
+                  <div className="text-sm text-muted-foreground">
                     Not applicable{selectedArchitecture ? ` — ${selectedArchitecture.name} doesn't run on a track` : ''}
                   </div>
                 )}
               </div>
               <div>
-                <div className="text-xs text-neutral-500">Door Frame</div>
+                <div className="text-xs text-muted-foreground">Door Frame</div>
                 {result.recommendedFrame ? (
                   <div className="text-sm font-medium">
                     {result.recommendedFrame.name}{' '}
-                    <span className="text-xs text-neutral-400">
+                    <span className="text-xs text-muted-foreground">
                       (cap {String(result.recommendedFrame.max_capacity_kg)}kg)
                     </span>
                   </div>
                 ) : (
-                  <div className="text-sm text-neutral-400">—</div>
+                  <div className="text-sm text-muted-foreground">—</div>
                 )}
               </div>
               <div>
-                <div className="text-xs text-neutral-500">Hinges</div>
+                <div className="text-xs text-muted-foreground">Hinges</div>
                 {result.recommendedHinge ? (
                   <div className="text-sm font-medium">
                     {result.hingeQuantity} × {result.recommendedHinge.name}
                   </div>
                 ) : (
-                  <div className="text-sm text-neutral-400">
+                  <div className="text-sm text-muted-foreground">
                     Not applicable{selectedArchitecture ? ` — ${selectedArchitecture.name} doesn't use hinges` : ''}
                   </div>
                 )}
               </div>
               <div>
-                <div className="text-xs text-neutral-500">Floor Spring</div>
+                <div className="text-xs text-muted-foreground">Floor Spring</div>
                 {result.recommendedFloorSpring ? (
                   <div className="text-sm font-medium">{result.recommendedFloorSpring.name}</div>
                 ) : (
-                  <div className="text-sm text-neutral-400">Not applicable</div>
+                  <div className="text-sm text-muted-foreground">Not applicable</div>
                 )}
               </div>
               <div>
-                <div className="text-xs text-neutral-500">Handle</div>
+                <div className="text-xs text-muted-foreground">Handle</div>
                 {result.recommendedHandle ? (
                   <div className="text-sm font-medium">{result.recommendedHandle.name}</div>
                 ) : (
-                  <div className="text-sm text-neutral-400">None compatible</div>
+                  <div className="text-sm text-muted-foreground">None compatible</div>
                 )}
               </div>
               <div>
-                <div className="text-xs text-neutral-500">Lock</div>
+                <div className="text-xs text-muted-foreground">Lock</div>
                 {result.recommendedLock ? (
                   <div className="text-sm font-medium">{result.recommendedLock.name}</div>
                 ) : (
-                  <div className="text-sm text-neutral-400">None compatible</div>
+                  <div className="text-sm text-muted-foreground">None compatible</div>
                 )}
               </div>
             </CardContent>
@@ -320,28 +293,28 @@ export function ConfiguratorPage() {
               <CardTitle>Frame profile quantities (auto-calculated)</CardTitle>
             </CardHeader>
             <CardContent>
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-neutral-200 text-xs text-neutral-500 dark:border-neutral-800">
-                    <th className="py-1">Role</th>
-                    <th>Qty</th>
-                    <th>Length</th>
-                    <th>Weight</th>
-                    <th>Cost</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Qty</TableHead>
+                    <TableHead>Length</TableHead>
+                    <TableHead>Weight</TableHead>
+                    <TableHead>Cost</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {result.profileLines.map((line, i) => (
-                    <tr key={i} className="border-b border-neutral-100 dark:border-neutral-900">
-                      <td className="py-1">{line.role_name}</td>
-                      <td>{line.quantity}</td>
-                      <td>{line.length_mm} mm</td>
-                      <td>{line.weight_kg} kg</td>
-                      <td>₹{line.cost.toLocaleString()}</td>
-                    </tr>
+                    <TableRow key={i}>
+                      <TableCell>{line.role_name}</TableCell>
+                      <TableCell>{line.quantity}</TableCell>
+                      <TableCell>{line.length_mm} mm</TableCell>
+                      <TableCell>{line.weight_kg} kg</TableCell>
+                      <TableCell>₹{line.cost.toLocaleString()}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
 
@@ -350,32 +323,34 @@ export function ConfiguratorPage() {
               <CardTitle>Complete BOM (Step 16)</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-neutral-200 text-xs text-neutral-500 dark:border-neutral-800">
-                    <th className="py-1">Category</th>
-                    <th>Item</th>
-                    <th>Qty</th>
-                    <th>Unit cost</th>
-                    <th>Total</th>
-                    <th>Formula</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Item</TableHead>
+                    <TableHead>Qty</TableHead>
+                    <TableHead>Unit cost</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Formula</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {result.bomLines.map((line, i) => (
-                    <tr key={i} className="border-b border-neutral-100 dark:border-neutral-900">
-                      <td className="py-1">{line.category}</td>
-                      <td>{line.item}</td>
-                      <td>
+                    <TableRow key={i}>
+                      <TableCell>{line.category}</TableCell>
+                      <TableCell>{line.item}</TableCell>
+                      <TableCell>
                         {line.quantity} {line.unit}
-                      </td>
-                      <td>₹{line.unit_cost.toLocaleString()}</td>
-                      <td>₹{line.total_cost.toLocaleString()}</td>
-                      <td className="max-w-xs text-xs text-neutral-400">{line.formula}</td>
-                    </tr>
+                      </TableCell>
+                      <TableCell>₹{line.unit_cost.toLocaleString()}</TableCell>
+                      <TableCell>₹{line.total_cost.toLocaleString()}</TableCell>
+                      <TableCell className="max-w-xs text-xs whitespace-normal text-muted-foreground">
+                        {line.formula}
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               <div className="flex flex-col items-end gap-1 text-sm">
                 <span>Material cost: ₹{result.materialCost.toLocaleString()}</span>
                 <span>Waste: ₹{result.wasteCost.toLocaleString()}</span>

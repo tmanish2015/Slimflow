@@ -4,6 +4,7 @@ import { api, type RateMaster } from '~/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Input } from '~/components/ui/input'
 import { Button } from '~/components/ui/button'
+import { Label } from '~/components/ui/label'
 
 const FIELDS: { key: keyof RateMaster; label: string }[] = [
   { key: 'currency', label: 'Currency' },
@@ -30,7 +31,7 @@ export function RatesPage() {
     api.getRateMaster().then(setRates)
   }, [])
 
-  if (!rates) return <div className="p-6 text-sm text-neutral-500">Loading…</div>
+  if (!rates) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
 
   const save = async () => {
     const updated = await api.saveRateMaster(rates)
@@ -41,7 +42,7 @@ export function RatesPage() {
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-4 p-6">
-      <Link to="/" className="text-sm text-neutral-500 hover:underline">
+      <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
         ← Back
       </Link>
       <Card>
@@ -50,8 +51,8 @@ export function RatesPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {FIELDS.map((f) => (
-            <label key={f.key} className="flex items-center justify-between gap-4 text-sm">
-              <span className="text-neutral-600 dark:text-neutral-400">{f.label}</span>
+            <div key={f.key} className="flex items-center justify-between gap-4 text-sm">
+              <Label className="text-muted-foreground">{f.label}</Label>
               <Input
                 className="w-40"
                 type={f.key === 'currency' ? 'text' : 'number'}
@@ -63,7 +64,7 @@ export function RatesPage() {
                   })
                 }
               />
-            </label>
+            </div>
           ))}
           <Button onClick={save} className="mt-2 self-end">
             {saved ? 'Saved ✓' : 'Save rates'}

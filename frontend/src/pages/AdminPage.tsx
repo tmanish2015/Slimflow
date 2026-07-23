@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { X } from 'lucide-react'
 import { adminApi, type AdminColumn, type AdminRow } from '~/lib/configuratorApi'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 
 function emptyRow(columns: AdminColumn[]): AdminRow {
   const row: AdminRow = {}
@@ -71,99 +74,100 @@ export function AdminPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
       <div>
-        <Link to="/" className="text-sm text-neutral-500 hover:underline">
+        <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
           ← Back
         </Link>
-        <h1 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-          Master Data Admin
-        </h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <h1 className="text-lg font-semibold tracking-tight">Master Data Admin</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           One generic editor for every configurator table — add a system, finish, profile, rate, or
           rule row without a code change.
         </p>
       </div>
 
       <Card>
-        <CardContent className="p-4">
-          <select
-            className="h-9 w-72 rounded border border-neutral-300 bg-white px-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+        <CardContent>
+          <Select
+            items={Object.fromEntries(tables.map((t) => [t, t]))}
             value={table}
-            onChange={(e) => void loadTable(e.target.value)}
+            onValueChange={(v) => v && void loadTable(v)}
           >
-            <option value="" disabled>
-              Select table…
-            </option>
-            {tables.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-72">
+              <SelectValue placeholder="Select table…" />
+            </SelectTrigger>
+            <SelectContent>
+              {tables.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       {table && (
         <Card>
           <CardHeader>
             <CardTitle>{table}</CardTitle>
           </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-neutral-200 text-xs text-neutral-500 dark:border-neutral-800">
-                  <th className="py-1 pr-2">id</th>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>id</TableHead>
                   {editableColumns.map((c) => (
-                    <th key={c.name} className="pr-2">
-                      {c.name}
-                    </th>
+                    <TableHead key={c.name}>{c.name}</TableHead>
                   ))}
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {rows.map((row, idx) => (
-                  <tr key={String(row.id)} className="border-b border-neutral-100 dark:border-neutral-900">
-                    <td className="py-1 pr-2 text-neutral-400">{String(row.id)}</td>
+                  <TableRow key={String(row.id)}>
+                    <TableCell className="text-muted-foreground">{String(row.id)}</TableCell>
                     {editableColumns.map((c) => (
-                      <td key={c.name} className="pr-2">
+                      <TableCell key={c.name}>
                         <Input
                           className="h-8 w-32 text-xs"
                           value={row[c.name] ?? ''}
                           onChange={(e) => updateCell(idx, c.name, e.target.value)}
                         />
-                      </td>
+                      </TableCell>
                     ))}
-                    <td className="flex gap-1 py-1">
-                      <Button size="sm" variant="outline" onClick={() => save(row)}>
-                        Save
-                      </Button>
-                      <Button size="sm" variant="destructive" onClick={() => remove(row.id as number)}>
-                        Delete
-                      </Button>
-                    </td>
-                  </tr>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="outline" onClick={() => save(row)}>
+                          Save
+                        </Button>
+                        <Button size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-destructive" onClick={() => remove(row.id as number)}>
+                          <X className="size-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 ))}
-                <tr>
+                <TableRow>
+                  <TableCell className="text-xs text-muted-foreground">new</TableCell>
                   {editableColumns.map((c) => (
-                    <td key={c.name} className="pr-2 pt-2">
+                    <TableCell key={c.name}>
                       <Input
                         className="h-8 w-32 text-xs"
                         placeholder={c.name}
                         value={newRow[c.name] ?? ''}
                         onChange={(e) => setNewRow((prev) => ({ ...prev, [c.name]: e.target.value }))}
                       />
-                    </td>
+                    </TableCell>
                   ))}
-                  <td className="pt-2">
+                  <TableCell>
                     <Button size="sm" onClick={add}>
                       + Add
                     </Button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

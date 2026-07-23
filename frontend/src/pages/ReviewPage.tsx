@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { X } from 'lucide-react'
 import {
   api,
   type DrawingFeature,
@@ -12,15 +13,13 @@ import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Badge } from '~/components/ui/badge'
 import { Input } from '~/components/ui/input'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
+import { SelectField } from '~/components/select-field'
 import { DrawingSchematic, type SchematicInput } from '~/components/DrawingSchematic'
 import { toMillimetres } from '~/lib/units'
 
 const UNIT_OPTIONS: NonNullable<ExtractedDimension['unit']>[] = ['mm', 'cm', 'in', 'ft']
-const PANEL_MATERIAL_OPTIONS: { value: PanelMaterial; label: string }[] = [
-  { value: 'glass', label: 'Glass' },
-  { value: 'acp', label: 'ACP' },
-  { value: 'wpc', label: 'WPC' },
-]
+const PANEL_MATERIAL_OPTIONS: PanelMaterial[] = ['glass', 'acp', 'wpc']
 
 const KIND_OPTIONS: ExtractedDimension['kind'][] = [
   'width',
@@ -33,6 +32,8 @@ const KIND_OPTIONS: ExtractedDimension['kind'][] = [
   'drawing_unit',
   'unknown',
 ]
+const SHAPE_OPTIONS: DrawingFeature['shape'][] = ['arch', 'custom']
+const POSITION_OPTIONS: DrawingFeature['position'][] = ['top', 'middle', 'bottom']
 
 function formatCurrency(n: number, currency: string) {
   return `${currency === 'INR' ? '₹' : currency + ' '}${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
@@ -89,6 +90,14 @@ function emptyFeature(): DrawingFeature {
   }
 }
 
+function RemoveButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-destructive" onClick={onClick}>
+      <X className="size-3.5" />
+    </Button>
+  )
+}
+
 export function ReviewPage() {
   const { id } = useParams<{ id: string }>()
   const [drawing, setDrawing] = useState<DrawingRecord | null>(null)
@@ -137,7 +146,7 @@ export function ReviewPage() {
   )
 
   if (!id) return null
-  if (!drawing) return <div className="p-6 text-sm text-neutral-500">Loading…</div>
+  if (!drawing) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
 
   const updateRow = (rowId: string, patch: Partial<ExtractedDimension>) => {
     setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, ...patch } : r)))
@@ -268,12 +277,10 @@ export function ReviewPage() {
     <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <Link to="/" className="text-sm text-neutral-500 hover:underline">
+          <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
             ← Back
           </Link>
-          <h1 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-            {drawing.originalFilename}
-          </h1>
+          <h1 className="text-lg font-semibold tracking-tight">{drawing.originalFilename}</h1>
         </div>
         <Badge variant={isProcessing ? 'warning' : drawing.status === 'failed' ? 'destructive' : 'success'}>
           {drawing.status.replace('_', ' ')}
@@ -282,17 +289,15 @@ export function ReviewPage() {
 
       {isProcessing && (
         <Card>
-          <CardContent className="p-6 text-sm text-neutral-500">
+          <CardContent className="text-sm text-muted-foreground">
             Preprocessing and reading dimensions with OCR — this can take a few seconds…
           </CardContent>
         </Card>
       )}
 
       {drawing.errorMessage && (
-        <Card className="border-amber-300 dark:border-amber-700">
-          <CardContent className="p-4 text-sm text-amber-700 dark:text-amber-400">
-            {drawing.errorMessage}
-          </CardContent>
+        <Card className="ring-amber-300 dark:ring-amber-700">
+          <CardContent className="text-sm text-amber-700 dark:text-amber-400">{drawing.errorMessage}</CardContent>
         </Card>
       )}
 
@@ -303,7 +308,7 @@ export function ReviewPage() {
               <CardTitle>Processed drawing</CardTitle>
             </CardHeader>
             <CardContent>
-              <img src={previewUrl} alt="Processed drawing" className="w-full rounded border border-neutral-200 dark:border-neutral-800" />
+              <img src={previewUrl} alt="Processed drawing" className="w-full rounded-lg ring-1 ring-border" />
             </CardContent>
           </Card>
 
@@ -323,78 +328,64 @@ export function ReviewPage() {
           <Card>
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle>Extracted dimensions — review &amp; confirm</CardTitle>
-              <label className="flex items-center gap-2 text-xs text-neutral-500">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 Panel material
-                <select
-                  className="h-8 rounded border border-neutral-300 bg-white px-2 text-xs dark:border-neutral-700 dark:bg-neutral-900"
-                  value={panelMaterial}
-                  onChange={(e) => void savePanelMaterial(e.target.value as PanelMaterial)}
-                >
-                  {PANEL_MATERIAL_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              <div className="grid grid-cols-[1fr_80px_60px_70px_24px] gap-2 text-xs font-medium text-neutral-500">
-                <span>Kind / label</span>
-                <span>Value</span>
-                <span>Unit</span>
-                <span>Confirm</span>
-                <span />
+                <SelectField value={panelMaterial} onValueChange={savePanelMaterial} options={PANEL_MATERIAL_OPTIONS} />
               </div>
-              {rows.map((row) => (
-                <div key={row.id} className="grid grid-cols-[1fr_80px_60px_70px_24px] items-center gap-2">
-                  <select
-                    className="h-8 rounded border border-neutral-300 bg-white px-2 text-xs dark:border-neutral-700 dark:bg-neutral-900"
-                    value={row.kind}
-                    onChange={(e) => updateRow(row.id, { kind: e.target.value as ExtractedDimension['kind'] })}
-                  >
-                    {KIND_OPTIONS.map((k) => (
-                      <option key={k} value={k}>
-                        {k}
-                      </option>
-                    ))}
-                  </select>
-                  <Input
-                    type="number"
-                    className="h-8 text-xs"
-                    value={row.value ?? ''}
-                    onChange={(e) =>
-                      updateRow(row.id, { value: e.target.value === '' ? null : Number(e.target.value) })
-                    }
-                  />
-                  <select
-                    className="h-8 rounded border border-neutral-300 bg-white px-1 text-xs dark:border-neutral-700 dark:bg-neutral-900"
-                    value={row.unit ?? ''}
-                    onChange={(e) =>
-                      updateRow(row.id, { unit: (e.target.value || null) as ExtractedDimension['unit'] })
-                    }
-                  >
-                    {UNIT_OPTIONS.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="checkbox"
-                    checked={row.confirmed}
-                    onChange={(e) => updateRow(row.id, { confirmed: e.target.checked })}
-                  />
-                  <button
-                    onClick={() => removeRow(row.id)}
-                    className="text-xs text-neutral-400 hover:text-red-500"
-                    title="Remove"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-              <div className="mt-2 flex items-center gap-2">
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Kind / label</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead>Confirm</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>
+                        <SelectField
+                          value={row.kind}
+                          onValueChange={(v) => updateRow(row.id, { kind: v })}
+                          options={KIND_OPTIONS}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          className="h-8 w-24 text-xs"
+                          value={row.value ?? ''}
+                          onChange={(e) =>
+                            updateRow(row.id, { value: e.target.value === '' ? null : Number(e.target.value) })
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <SelectField
+                          value={row.unit ?? 'mm'}
+                          onValueChange={(v) => updateRow(row.id, { unit: v })}
+                          options={UNIT_OPTIONS}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={row.confirmed}
+                          onChange={(e) => updateRow(row.id, { confirmed: e.target.checked })}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <RemoveButton onClick={() => removeRow(row.id)} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={addRow}>
                   + Add dimension
                 </Button>
@@ -402,7 +393,7 @@ export function ReviewPage() {
                   {saving ? 'Saving…' : 'Save'}
                 </Button>
               </div>
-              <p className="mt-1 text-xs text-neutral-400">
+              <p className="text-xs text-muted-foreground">
                 Low-confidence guesses are unchecked by default — confirm or correct each value before
                 generating a BOM.
               </p>
@@ -416,54 +407,64 @@ export function ReviewPage() {
                 {suggestingHardware ? 'Suggesting…' : 'Suggest from height'}
               </Button>
             </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              <p className="text-xs text-neutral-400">
+            <CardContent className="flex flex-col gap-3">
+              <p className="text-xs text-muted-foreground">
                 Reviewed and confirmed before the cost roll-up below — quantities scale with the
                 confirmed dimensions (e.g. hinge count from height), not a flat guessed count.
               </p>
               {hardwareItems.length > 0 && (
-                <div className="grid grid-cols-[1fr_70px_90px_1fr_24px] gap-2 text-xs font-medium text-neutral-500">
-                  <span>Label</span>
-                  <span>Qty</span>
-                  <span>Unit cost</span>
-                  <span>Notes</span>
-                  <span />
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Label</TableHead>
+                      <TableHead>Qty</TableHead>
+                      <TableHead>Unit cost</TableHead>
+                      <TableHead>Notes</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {hardwareItems.map((h) => (
+                      <TableRow key={h.id}>
+                        <TableCell>
+                          <Input
+                            className="h-8 text-xs"
+                            value={h.label}
+                            onChange={(e) => updateHardwareItem(h.id, { label: e.target.value })}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            className="h-8 w-20 text-xs"
+                            value={h.quantity}
+                            onChange={(e) => updateHardwareItem(h.id, { quantity: Number(e.target.value) || 0 })}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            className="h-8 w-24 text-xs"
+                            value={h.unitCost}
+                            onChange={(e) => updateHardwareItem(h.id, { unitCost: Number(e.target.value) || 0 })}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            className="h-8 text-xs"
+                            value={h.notes}
+                            onChange={(e) => updateHardwareItem(h.id, { notes: e.target.value })}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <RemoveButton onClick={() => removeHardwareItem(h.id)} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
-              {hardwareItems.map((h) => (
-                <div key={h.id} className="grid grid-cols-[1fr_70px_90px_1fr_24px] items-center gap-2">
-                  <Input
-                    className="h-8 text-xs"
-                    value={h.label}
-                    onChange={(e) => updateHardwareItem(h.id, { label: e.target.value })}
-                  />
-                  <Input
-                    type="number"
-                    className="h-8 text-xs"
-                    value={h.quantity}
-                    onChange={(e) => updateHardwareItem(h.id, { quantity: Number(e.target.value) || 0 })}
-                  />
-                  <Input
-                    type="number"
-                    className="h-8 text-xs"
-                    value={h.unitCost}
-                    onChange={(e) => updateHardwareItem(h.id, { unitCost: Number(e.target.value) || 0 })}
-                  />
-                  <Input
-                    className="h-8 text-xs"
-                    value={h.notes}
-                    onChange={(e) => updateHardwareItem(h.id, { notes: e.target.value })}
-                  />
-                  <button
-                    onClick={() => removeHardwareItem(h.id)}
-                    className="text-xs text-neutral-400 hover:text-red-500"
-                    title="Remove"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-              <div className="mt-2 flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={addHardwareItem}>
                   + Add item
                 </Button>
@@ -472,7 +473,7 @@ export function ReviewPage() {
                 </Button>
               </div>
               {hardwareItems.length === 0 && (
-                <p className="text-xs text-neutral-400">
+                <p className="text-xs text-muted-foreground">
                   Empty — click &quot;Suggest from height&quot; (needs confirmed Height) or add items
                   manually. If left empty, Generate BOM will auto-suggest before calculating.
                 </p>
@@ -484,70 +485,73 @@ export function ReviewPage() {
             <CardHeader>
               <CardTitle>Special features (manually tagged)</CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              <p className="text-xs text-neutral-400">
+            <CardContent className="flex flex-col gap-3">
+              <p className="text-xs text-muted-foreground">
                 For design elements the automatic pipeline can&apos;t detect — e.g. an arched fanlight
                 from a hand sketch. Not auto-detected: add it here with its own cost, and it&apos;ll show
                 up as a BOM line and an overlay on the schematic above.
               </p>
               {features.length > 0 && (
-                <div className="grid grid-cols-[1fr_90px_90px_1fr_80px_24px] gap-2 text-xs font-medium text-neutral-500">
-                  <span>Label</span>
-                  <span>Shape</span>
-                  <span>Position</span>
-                  <span>Material / notes</span>
-                  <span>Cost</span>
-                  <span />
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Label</TableHead>
+                      <TableHead>Shape</TableHead>
+                      <TableHead>Position</TableHead>
+                      <TableHead>Material / notes</TableHead>
+                      <TableHead>Cost</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {features.map((f) => (
+                      <TableRow key={f.id}>
+                        <TableCell>
+                          <Input
+                            className="h-8 text-xs"
+                            value={f.label}
+                            onChange={(e) => updateFeature(f.id, { label: e.target.value })}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <SelectField
+                            value={f.shape}
+                            onValueChange={(v) => updateFeature(f.id, { shape: v })}
+                            options={SHAPE_OPTIONS}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <SelectField
+                            value={f.position}
+                            onValueChange={(v) => updateFeature(f.id, { position: v })}
+                            options={POSITION_OPTIONS}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            className="h-8 text-xs"
+                            placeholder="e.g. frosted glass"
+                            value={f.material}
+                            onChange={(e) => updateFeature(f.id, { material: e.target.value })}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            className="h-8 w-20 text-xs"
+                            value={f.cost}
+                            onChange={(e) => updateFeature(f.id, { cost: Number(e.target.value) || 0 })}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <RemoveButton onClick={() => removeFeature(f.id)} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
-              {features.map((f) => (
-                <div key={f.id} className="grid grid-cols-[1fr_90px_90px_1fr_80px_24px] items-center gap-2">
-                  <Input
-                    className="h-8 text-xs"
-                    value={f.label}
-                    onChange={(e) => updateFeature(f.id, { label: e.target.value })}
-                  />
-                  <select
-                    className="h-8 rounded border border-neutral-300 bg-white px-1 text-xs dark:border-neutral-700 dark:bg-neutral-900"
-                    value={f.shape}
-                    onChange={(e) => updateFeature(f.id, { shape: e.target.value as DrawingFeature['shape'] })}
-                  >
-                    <option value="arch">arch</option>
-                    <option value="custom">custom</option>
-                  </select>
-                  <select
-                    className="h-8 rounded border border-neutral-300 bg-white px-1 text-xs dark:border-neutral-700 dark:bg-neutral-900"
-                    value={f.position}
-                    onChange={(e) =>
-                      updateFeature(f.id, { position: e.target.value as DrawingFeature['position'] })
-                    }
-                  >
-                    <option value="top">top</option>
-                    <option value="middle">middle</option>
-                    <option value="bottom">bottom</option>
-                  </select>
-                  <Input
-                    className="h-8 text-xs"
-                    placeholder="e.g. frosted glass"
-                    value={f.material}
-                    onChange={(e) => updateFeature(f.id, { material: e.target.value })}
-                  />
-                  <Input
-                    type="number"
-                    className="h-8 text-xs"
-                    value={f.cost}
-                    onChange={(e) => updateFeature(f.id, { cost: Number(e.target.value) || 0 })}
-                  />
-                  <button
-                    onClick={() => removeFeature(f.id)}
-                    className="text-xs text-neutral-400 hover:text-red-500"
-                    title="Remove"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-              <div className="mt-2 flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={addFeature}>
                   + Add feature
                 </Button>
@@ -569,35 +573,37 @@ export function ReviewPage() {
             </Button>
           </CardHeader>
           <CardContent>
-            {genError && <p className="mb-2 text-sm text-red-600">{genError}</p>}
+            {genError && <p className="mb-2 text-sm text-destructive">{genError}</p>}
             {drawing.bom ? (
               <div className="flex flex-col gap-3">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-neutral-200 text-xs text-neutral-500 dark:border-neutral-800">
-                      <th className="py-1">Category</th>
-                      <th>Item</th>
-                      <th>Qty</th>
-                      <th>Unit cost</th>
-                      <th>Total</th>
-                      <th>Formula</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Item</TableHead>
+                      <TableHead>Qty</TableHead>
+                      <TableHead>Unit cost</TableHead>
+                      <TableHead>Total</TableHead>
+                      <TableHead>Formula</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {drawing.bom.lines.map((line, i) => (
-                      <tr key={i} className="border-b border-neutral-100 dark:border-neutral-900">
-                        <td className="py-1">{line.category}</td>
-                        <td>{line.item}</td>
-                        <td>
+                      <TableRow key={i}>
+                        <TableCell>{line.category}</TableCell>
+                        <TableCell>{line.item}</TableCell>
+                        <TableCell>
                           {line.quantity} {line.unit}
-                        </td>
-                        <td>{formatCurrency(line.unitCost, currency)}</td>
-                        <td>{formatCurrency(line.totalCost, currency)}</td>
-                        <td className="max-w-xs text-xs text-neutral-400">{line.formula}</td>
-                      </tr>
+                        </TableCell>
+                        <TableCell>{formatCurrency(line.unitCost, currency)}</TableCell>
+                        <TableCell>{formatCurrency(line.totalCost, currency)}</TableCell>
+                        <TableCell className="max-w-xs text-xs whitespace-normal text-muted-foreground">
+                          {line.formula}
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
                 <div className="flex flex-col items-end gap-1 text-sm">
                   <span>Material cost: {formatCurrency(drawing.bom.materialCost, currency)}</span>
                   <span>Waste: {formatCurrency(drawing.bom.wasteCost, currency)}</span>
@@ -611,9 +617,7 @@ export function ReviewPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-neutral-500">
-                Confirm Width and Height above, then generate the BOM.
-              </p>
+              <p className="text-sm text-muted-foreground">Confirm Width and Height above, then generate the BOM.</p>
             )}
           </CardContent>
         </Card>
