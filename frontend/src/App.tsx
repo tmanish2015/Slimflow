@@ -6,11 +6,13 @@ import { ReviewPage } from '~/pages/ReviewPage'
 import { RatesPage } from '~/pages/RatesPage'
 import { ConfiguratorPage } from '~/pages/ConfiguratorPage'
 import { AdminPage } from '~/pages/AdminPage'
+import { DashboardPage } from '~/pages/DashboardPage'
 import { Button } from '~/components/ui/button'
 import { cn } from '~/lib/utils'
 
 const NAV_ITEMS = [
   { to: '/configurator', label: 'Configurator' },
+  { to: '/dashboard', label: 'Dashboard' },
   { to: '/admin', label: 'Admin' },
   { to: '/rates', label: 'Rate master' },
 ]
@@ -67,6 +69,7 @@ export default function App() {
         <Route path="/drawings/:id" element={<ReviewPage />} />
         <Route path="/rates" element={<RatesPage />} />
         <Route path="/configurator" element={<ConfiguratorPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/admin" element={<AdminPage />} />
       </Routes>
     </div>

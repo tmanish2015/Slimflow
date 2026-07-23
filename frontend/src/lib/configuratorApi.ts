@@ -137,6 +137,29 @@ export interface AdminColumn {
 
 export type AdminRow = Record<string, string | number | null>
 
+/** Raw row shape from GET /configurations (the configurations table itself,
+ * snake_case) — distinct from ConfigurationResult, which is the richer
+ * shape POST /configurations returns with every recommendation resolved. */
+export interface SavedConfiguration {
+  id: string
+  name: string
+  system_type_id: number
+  door_architecture_id: number
+  panel_configuration_id: number
+  profile_series_id: number
+  finish_id: number
+  glass_id: number | null
+  width_mm: number
+  height_mm: number
+  estimated_door_weight_kg: number | null
+  material_cost: number | null
+  waste_cost: number | null
+  total_cost: number | null
+  selling_price: number | null
+  created_at: string
+  updated_at: string
+}
+
 export interface CreateConfigurationInput {
   name?: string
   systemTypeId: number
@@ -160,6 +183,9 @@ async function json<T>(res: Response): Promise<T> {
 export const configuratorApi = {
   getReference() {
     return fetch(`${BASE}/reference`).then((r) => json<ReferenceData>(r))
+  },
+  getConfigurations() {
+    return fetch(`${BASE}/configurations`).then((r) => json<SavedConfiguration[]>(r))
   },
   createConfiguration(input: CreateConfigurationInput) {
     return fetch(`${BASE}/configurations`, {
