@@ -5,6 +5,7 @@ import type {
   DoorArchitecture,
   FloorSpringMaster,
   FrameMaster,
+  GlassBeadMaster,
   HandleMaster,
   HardwareSetMaster,
   HingeMaster,
@@ -277,6 +278,25 @@ export function recommendHardwareSet(
   return db
     .prepare('SELECT * FROM hardware_set_master WHERE id = ?')
     .get(rule.recommended_hardware_set_id) as unknown as HardwareSetMaster
+}
+
+/**
+ * Glass bead sizing — banded by glass thickness rather than a flat
+ * per-series placeholder (thicker glass needs a deeper/heavier bead to hold
+ * it, independent of which profile series it's fitted to). No priority
+ * column: bands are expected not to overlap, so the first match is the only
+ * match, unlike the weight-banded recommendation tables above.
+ */
+export function recommendGlassBead(thicknessMm: number): GlassBeadMaster | null {
+  return (
+    (db
+      .prepare(
+        `SELECT * FROM glass_bead_master
+         WHERE min_thickness_mm <= ? AND (max_thickness_mm IS NULL OR max_thickness_mm >= ?)
+         LIMIT 1`,
+      )
+      .get(thicknessMm, thicknessMm) as unknown as GlassBeadMaster | undefined) ?? null
+  )
 }
 
 export function recommendHandle(selection: Selection): HandleMaster | null {

@@ -25,6 +25,8 @@ export function seedIfEmpty() {
       .prepare("SELECT COUNT(*) as n FROM compatibility_rules WHERE constraint_table = 'profile_series'")
       .get() as { n: number }
     if (seriesRuleCount.n === 0) seedSeriesCompatibilityRules()
+    const beadCount = db.prepare('SELECT COUNT(*) as n FROM glass_bead_master').get() as { n: number }
+    if (beadCount.n === 0) seedGlassBeads()
     return
   }
 
@@ -246,6 +248,8 @@ export function seedIfEmpty() {
       ['Laminated 8.38mm', 'laminated', 8.38, 2.0, 150],
     ],
   )
+
+  seedGlassBeads()
 
   insertMany('INSERT INTO accessory_master (name, unit, rate) VALUES (?, ?, ?)', [
     ['Silicone Sealant Tube', 'pcs', 180],
@@ -496,6 +500,25 @@ function seedCompatibilityRules() {
     idByName('door_architectures', 'Sliding'),
     'excludes',
   )
+}
+
+// Banded by glass thickness, not by series — a thicker pane needs a
+// deeper/heavier bead regardless of which profile it's fitted to. Bands
+// cover every thickness seeded above (5, 6, 8, 8.38, 12, 24mm). Its own
+// function (rather than inline insertMany) so the migration branch for an
+// existing dev DB can call the exact same seed rows.
+function seedGlassBeads() {
+  const insertBead = db.prepare(
+    'INSERT INTO glass_bead_master (name, min_thickness_mm, max_thickness_mm, weight_per_metre_kg, rate_per_metre) VALUES (?, ?, ?, ?, ?)',
+  )
+  for (const row of [
+    ['Bead 4-6mm', 0, 6.5, 0.15, 70],
+    ['Bead 7-9mm', 6.5, 9.5, 0.2, 90],
+    ['Bead 10-14mm', 9.5, 14, 0.28, 120],
+    ['Bead 20-26mm', 14, 30, 0.4, 180],
+  ] as const) {
+    insertBead.run(...row)
+  }
 }
 
 // Series-gated hardware: some hardware is physically tied to one profile's

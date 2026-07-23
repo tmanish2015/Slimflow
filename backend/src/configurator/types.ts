@@ -135,6 +135,15 @@ export interface TapeMaster {
   rate_per_sqft: number
 }
 
+export interface GlassBeadMaster {
+  id: number
+  name: string
+  min_thickness_mm: number
+  max_thickness_mm: number | null
+  weight_per_metre_kg: number
+  rate_per_metre: number
+}
+
 export interface AccessoryMaster {
   id: number
   name: string

@@ -158,6 +158,22 @@ CREATE TABLE IF NOT EXISTS glass_master (
   rate_per_sqft REAL NOT NULL
 );
 
+-- Glass bead sizing is keyed to glass thickness, not to the profile series —
+-- a thicker glass pane needs a deeper/heavier bead to hold it, regardless of
+-- which series it's fitted to. Banded by thickness the same way track/frame
+-- are banded by weight; min/max_thickness_mm ranges are expected not to
+-- overlap (no priority column needed, unlike the weight-banded rule tables,
+-- since an admin adding a new band is defining a new non-overlapping range,
+-- not overriding an existing one).
+CREATE TABLE IF NOT EXISTS glass_bead_master (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT UNIQUE NOT NULL,
+  min_thickness_mm REAL NOT NULL DEFAULT 0,
+  max_thickness_mm REAL,
+  weight_per_metre_kg REAL NOT NULL,
+  rate_per_metre REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS accessory_master (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT UNIQUE NOT NULL,

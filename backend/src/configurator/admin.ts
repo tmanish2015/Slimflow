@@ -25,6 +25,7 @@ const ADMIN_TABLES = [
   'seal_master',
   'tape_master',
   'glass_master',
+  'glass_bead_master',
   'accessory_master',
   'floor_spring_master',
   'hardware_set_master',

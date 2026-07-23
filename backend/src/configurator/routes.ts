@@ -9,6 +9,7 @@ import {
   estimateHingeQuantity,
   recommendFloorSpring,
   recommendFrame,
+  recommendGlassBead,
   recommendHandle,
   recommendHardwareSet,
   recommendHinge,
@@ -139,6 +140,22 @@ function buildConfiguration(id: string, input: z.infer<typeof createConfiguratio
     throw new Error('Selected profile series has no profiles configured for its roles')
   }
 
+  // Glass bead is sized by the glass's own thickness, not by a flat
+  // per-series placeholder — override that one role's weight/cost in place
+  // if a thickness band matches, so the door-weight estimate and every BOM
+  // line derived from profileLines below pick up the change automatically.
+  // No glass selected, or an out-of-range thickness with no admin-defined
+  // band: leave the series' own Glass Bead profile line as-is.
+  const glassBead = glass ? recommendGlassBead(glass.thickness_mm) : null
+  if (glassBead) {
+    const beadLine = profileLines.find((l) => l.role_name === 'Glass Bead')
+    if (beadLine) {
+      const lengthM = beadLine.length_mm / 1000
+      beadLine.weight_kg = Number((beadLine.quantity * lengthM * glassBead.weight_per_metre_kg).toFixed(3))
+      beadLine.cost = Number((beadLine.quantity * lengthM * glassBead.rate_per_metre * finishGroup.multiplier).toFixed(2))
+    }
+  }
+
   const doorWeightKg = estimateDoorWeightKg(
     profileLines,
     input.widthMm,
@@ -229,7 +246,10 @@ function buildConfiguration(id: string, input: z.infer<typeof createConfiguratio
     unit: 'pcs',
     unit_cost: l.quantity > 0 ? Number((l.cost / l.quantity).toFixed(2)) : 0,
     total_cost: l.cost,
-    formula: `${l.length_mm}mm cut length`,
+    formula:
+      l.role_name === 'Glass Bead' && glassBead
+        ? `${l.length_mm}mm cut length, ${glassBead.name} (${glass!.thickness_mm}mm glass)`
+        : `${l.length_mm}mm cut length`,
   }))
 
   bomLines.push(...computeConnectorLines(profileLines))
