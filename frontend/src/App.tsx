@@ -65,9 +65,13 @@ function LogoutButton({ onLoggedOut }: { onLoggedOut: () => void }) {
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null)
+  const [needsSetup, setNeedsSetup] = useState(false)
 
   useEffect(() => {
-    authApi.me().then((r) => setAuthenticated(r.authenticated))
+    authApi.me().then((r) => {
+      setNeedsSetup(r.needsSetup)
+      setAuthenticated(r.authenticated)
+    })
   }, [])
 
   if (authenticated === null) {
@@ -75,7 +79,7 @@ export default function App() {
   }
 
   if (!authenticated) {
-    return <LoginPage onLoggedIn={() => setAuthenticated(true)} />
+    return <LoginPage needsSetup={needsSetup} onLoggedIn={() => setAuthenticated(true)} />
   }
 
   return (

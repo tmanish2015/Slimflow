@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~
 import { SelectField } from '~/components/select-field'
 import { DrawingSchematic, type SchematicInput } from '~/components/DrawingSchematic'
 import { toMillimetres } from '~/lib/units'
+import { downloadFile } from '~/services/drawing/storage'
 
 const UNIT_OPTIONS: NonNullable<ExtractedDimension['unit']>[] = ['mm', 'cm', 'in', 'ft']
 const PANEL_MATERIAL_OPTIONS: PanelMaterial[] = ['glass', 'acp', 'wpc']
@@ -111,6 +112,7 @@ export function ReviewPage() {
   const [suggestingHardware, setSuggestingHardware] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
   const [currency, setCurrency] = useState('INR')
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     if (!id) return
@@ -136,6 +138,28 @@ export function ReviewPage() {
     const timer = setInterval(() => void refresh(), 1500)
     return () => clearInterval(timer)
   }, [drawing, refresh])
+
+  // The preview PNG lives as a BLOB in the local database, not at a server
+  // URL — load it once processing has produced one and hand the browser an
+  // object URL, revoking the previous one so blobs don't pile up as the
+  // user navigates between drawings.
+  useEffect(() => {
+    if (!drawing?.previewPath) {
+      setPreviewUrl(null)
+      return
+    }
+    let cancelled = false
+    let objectUrl: string | null = null
+    downloadFile(drawing.id, 'preview').then(({ data, contentType }) => {
+      if (cancelled) return
+      objectUrl = URL.createObjectURL(new Blob([data as BlobPart], { type: contentType }))
+      setPreviewUrl(objectUrl)
+    })
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [drawing?.id, drawing?.previewPath])
 
   // Must run on every render (rows.length is defined even before `drawing`
   // loads) — placing this after the early returns below made the hook count
@@ -270,7 +294,6 @@ export function ReviewPage() {
     }
   }
 
-  const previewUrl = `/processed/${drawing.id}.png`
   const isProcessing = drawing.status === 'uploaded' || drawing.status === 'processing'
 
   return (
@@ -308,7 +331,11 @@ export function ReviewPage() {
               <CardTitle>Processed drawing</CardTitle>
             </CardHeader>
             <CardContent>
-              <img src={previewUrl} alt="Processed drawing" className="w-full rounded-lg ring-1 ring-border" />
+              {previewUrl ? (
+                <img src={previewUrl} alt="Processed drawing" className="w-full rounded-lg ring-1 ring-border" />
+              ) : (
+                <div className="text-sm text-muted-foreground">Loading preview…</div>
+              )}
             </CardContent>
           </Card>
 

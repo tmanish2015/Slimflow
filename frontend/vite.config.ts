@@ -11,11 +11,6 @@ export default defineConfig({
       '~': path.resolve(__dirname, './src'),
     },
   },
-  server: {
-    proxy: {
-      '/api': 'http://localhost:8787',
-      '/processed': 'http://localhost:8787',
-      '/uploads': 'http://localhost:8787',
-    },
-  },
+  // No backend anymore — the whole app runs client-side against a local
+  // sql.js database, so there's nothing left to proxy.
 })

@@ -1,25 +1,19 @@
-const BASE = '/api/auth'
-
-async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.error ?? `Request failed: ${res.status}`)
-  }
-  return res.json() as Promise<T>
-}
+import * as auth from '~/services/auth'
 
 export const authApi = {
-  me() {
-    return fetch(`${BASE}/me`).then((r) => json<{ authenticated: boolean }>(r))
+  async me(): Promise<{ authenticated: boolean; needsSetup: boolean }> {
+    return { authenticated: auth.isAuthenticated(), needsSetup: await auth.needsSetup() }
   },
-  login(username: string, password: string) {
-    return fetch(`${BASE}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    }).then((r) => json<{ ok: true }>(r))
+  async login(username: string, password: string): Promise<{ ok: true }> {
+    await auth.login(username, password)
+    return { ok: true }
   },
-  logout() {
-    return fetch(`${BASE}/logout`, { method: 'POST' }).then((r) => json<{ ok: true }>(r))
+  async setup(username: string, password: string): Promise<{ ok: true }> {
+    await auth.setup(username, password)
+    return { ok: true }
+  },
+  async logout(): Promise<{ ok: true }> {
+    auth.logout()
+    return { ok: true }
   },
 }

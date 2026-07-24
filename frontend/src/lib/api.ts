@@ -1,3 +1,9 @@
+import * as store from '~/services/drawing/store'
+import { uploadFile } from '~/services/drawing/storage'
+import { processDrawing } from '~/services/drawing/processDrawing'
+import { generateBom as generateBomLines, firstValueMm } from '~/services/drawing/bom'
+import { suggestHardware as suggestHardwareItems } from '~/services/drawing/hardware'
+import { getRateMaster as getRates, saveRateMaster as saveRates } from '~/services/drawing/rateMaster'
 import type {
   Bom,
   DrawingFeature,
@@ -8,73 +14,101 @@ import type {
   RateMaster,
 } from './types'
 
-const BASE = '/api'
-
-async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.error ? JSON.stringify(body.error) : `Request failed: ${res.status}`)
-  }
-  return res.json() as Promise<T>
-}
+const ACCEPTED_MIME = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/tiff', 'image/webp'])
 
 export const api = {
-  uploadDrawing(file: File) {
-    const form = new FormData()
-    form.append('file', file)
-    return fetch(`${BASE}/drawings`, { method: 'POST', body: form }).then((r) => json<DrawingRecord>(r))
+  async uploadDrawing(file: File): Promise<DrawingRecord> {
+    if (!ACCEPTED_MIME.has(file.type)) {
+      throw new Error(`Unsupported file type: ${file.type}`)
+    }
+    const record = await store.createDrawing({
+      originalFilename: file.name,
+      mimeType: file.type,
+      storedPath: file.name,
+    })
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    await uploadFile(record.id, 'upload', bytes, file.type)
+    void processDrawing(record)
+    return record as unknown as DrawingRecord
   },
-  getDrawing(id: string) {
-    return fetch(`${BASE}/drawings/${id}`).then((r) => json<DrawingRecord>(r))
+
+  async getDrawing(id: string): Promise<DrawingRecord> {
+    const drawing = await store.getDrawing(id)
+    if (!drawing) throw new Error('Drawing not found')
+    return drawing as unknown as DrawingRecord
   },
-  listDrawings() {
-    return fetch(`${BASE}/drawings`).then((r) => json<DrawingRecord[]>(r))
+
+  async listDrawings(): Promise<DrawingRecord[]> {
+    return (await store.listDrawings()) as unknown as DrawingRecord[]
   },
-  updateDimensions(id: string, dimensions: ExtractedDimension[]) {
-    return fetch(`${BASE}/drawings/${id}/dimensions`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dimensions }),
-    }).then((r) => json<DrawingRecord>(r))
+
+  async updateDimensions(id: string, dimensions: ExtractedDimension[]): Promise<DrawingRecord> {
+    const drawing = await store.getDrawing(id)
+    if (!drawing) throw new Error('Drawing not found')
+    const byId = new Map(drawing.dimensions.map((d) => [d.id, d]))
+    const next = dimensions.map((edit) => {
+      const existing = edit.id ? byId.get(edit.id) : undefined
+      return existing ? { ...existing, ...edit } : { ...edit, id: edit.id || crypto.randomUUID() }
+    })
+    return (await store.updateDrawing(id, { dimensions: next as store.ExtractedDimension[] })) as unknown as DrawingRecord
   },
-  updateFeatures(id: string, features: DrawingFeature[]) {
-    return fetch(`${BASE}/drawings/${id}/features`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ features }),
-    }).then((r) => json<DrawingRecord>(r))
+
+  async updateFeatures(id: string, features: DrawingFeature[]): Promise<DrawingRecord> {
+    const drawing = await store.getDrawing(id)
+    if (!drawing) throw new Error('Drawing not found')
+    const byId = new Map((drawing.features ?? []).map((f) => [f.id, f]))
+    const next = features.map((edit) => ({
+      ...edit,
+      id: (edit.id && byId.get(edit.id)?.id) || edit.id || crypto.randomUUID(),
+    }))
+    return (await store.updateDrawing(id, { features: next as store.DrawingFeature[] })) as unknown as DrawingRecord
   },
-  updateHardware(id: string, hardwareItems: HardwareItem[]) {
-    return fetch(`${BASE}/drawings/${id}/hardware`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hardwareItems }),
-    }).then((r) => json<DrawingRecord>(r))
+
+  async updateHardware(id: string, hardwareItems: HardwareItem[]): Promise<DrawingRecord> {
+    const drawing = await store.getDrawing(id)
+    if (!drawing) throw new Error('Drawing not found')
+    const byId = new Map((drawing.hardwareItems ?? []).map((h) => [h.id, h]))
+    const next = hardwareItems.map((edit) => ({
+      ...edit,
+      id: (edit.id && byId.get(edit.id)?.id) || edit.id || crypto.randomUUID(),
+    }))
+    return (await store.updateDrawing(id, { hardwareItems: next as store.HardwareItem[] })) as unknown as DrawingRecord
   },
-  suggestHardware(id: string) {
-    return fetch(`${BASE}/drawings/${id}/hardware/suggest`, { method: 'POST' }).then((r) =>
-      json<DrawingRecord>(r),
-    )
+
+  async suggestHardware(id: string): Promise<DrawingRecord> {
+    const drawing = await store.getDrawing(id)
+    if (!drawing) throw new Error('Drawing not found')
+    const heightMm = firstValueMm(drawing.dimensions, 'height')
+    if (heightMm == null) throw new Error('Confirm Height before suggesting hardware')
+    const rates = await getRates()
+    const hardwareItems = suggestHardwareItems(heightMm, rates)
+    return (await store.updateDrawing(id, { hardwareItems })) as unknown as DrawingRecord
   },
-  updatePanelMaterial(id: string, panelMaterial: PanelMaterial) {
-    return fetch(`${BASE}/drawings/${id}/panel-material`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ panelMaterial }),
-    }).then((r) => json<DrawingRecord>(r))
+
+  async updatePanelMaterial(id: string, panelMaterial: PanelMaterial): Promise<DrawingRecord> {
+    return (await store.updateDrawing(id, { panelMaterial })) as unknown as DrawingRecord
   },
-  generateBom(id: string) {
-    return fetch(`${BASE}/drawings/${id}/bom`, { method: 'POST' }).then((r) => json<DrawingRecord>(r))
+
+  async generateBom(id: string): Promise<DrawingRecord> {
+    const drawing = await store.getDrawing(id)
+    if (!drawing) throw new Error('Drawing not found')
+    const rates = await getRates()
+    const panelMaterial = drawing.panelMaterial ?? 'glass'
+    let hardwareItems = drawing.hardwareItems ?? []
+    if (hardwareItems.length === 0) {
+      const heightMm = firstValueMm(drawing.dimensions, 'height')
+      if (heightMm != null) hardwareItems = suggestHardwareItems(heightMm, rates)
+    }
+    const bom = generateBomLines(drawing.dimensions, drawing.features ?? [], hardwareItems, panelMaterial, rates)
+    return (await store.updateDrawing(id, { bom: bom as Bom, status: 'ready', hardwareItems })) as unknown as DrawingRecord
   },
-  getRateMaster() {
-    return fetch(`${BASE}/rate-master`).then((r) => json<RateMaster>(r))
+
+  async getRateMaster(): Promise<RateMaster> {
+    return getRates()
   },
-  saveRateMaster(patch: Partial<RateMaster>) {
-    return fetch(`${BASE}/rate-master`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    }).then((r) => json<RateMaster>(r))
+
+  async saveRateMaster(patch: Partial<RateMaster>): Promise<RateMaster> {
+    return saveRates(patch)
   },
 }
 

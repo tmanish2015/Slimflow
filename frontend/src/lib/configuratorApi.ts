@@ -1,4 +1,5 @@
-const BASE = '/api/configurator'
+import * as configurations from '~/services/configurator/configurations'
+import * as admin from '~/services/configurator/admin'
 
 export interface SystemType {
   id: number
@@ -137,9 +138,6 @@ export interface AdminColumn {
 
 export type AdminRow = Record<string, string | number | null>
 
-/** Raw row shape from GET /configurations (the configurations table itself,
- * snake_case) — distinct from ConfigurationResult, which is the richer
- * shape POST /configurations returns with every recommendation resolved. */
 export interface SavedConfiguration {
   id: string
   name: string
@@ -172,70 +170,46 @@ export interface CreateConfigurationInput {
   heightMm: number
 }
 
-async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.error ? JSON.stringify(body.error) : `Request failed: ${res.status}`)
-  }
-  return res.json() as Promise<T>
-}
-
 export const configuratorApi = {
-  getReference() {
-    return fetch(`${BASE}/reference`).then((r) => json<ReferenceData>(r))
+  getReference(): Promise<ReferenceData> {
+    return configurations.getReference() as unknown as Promise<ReferenceData>
   },
-  getConfigurations() {
-    return fetch(`${BASE}/configurations`).then((r) => json<SavedConfiguration[]>(r))
+  getConfigurations(): Promise<SavedConfiguration[]> {
+    return configurations.listConfigurations() as unknown as Promise<SavedConfiguration[]>
   },
-  createConfiguration(input: CreateConfigurationInput) {
-    return fetch(`${BASE}/configurations`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    }).then((r) => json<ConfigurationResult>(r))
+  createConfiguration(input: CreateConfigurationInput): Promise<ConfigurationResult> {
+    return configurations.createConfiguration(input) as unknown as Promise<ConfigurationResult>
   },
-  getCompatibility(query: CompatibilityQuery) {
-    const params = new URLSearchParams()
-    params.set('table', query.table)
-    if (query.systemTypeId) params.set('systemTypeId', String(query.systemTypeId))
-    if (query.doorArchitectureId) params.set('doorArchitectureId', String(query.doorArchitectureId))
-    if (query.panelConfigurationId) params.set('panelConfigurationId', String(query.panelConfigurationId))
-    if (query.profileSeriesId) params.set('profileSeriesId', String(query.profileSeriesId))
-    if (query.finishId) params.set('finishId', String(query.finishId))
-    if (query.glassId) params.set('glassId', String(query.glassId))
-    return fetch(`${BASE}/compatibility?${params.toString()}`).then((r) => json<CompatibilityRow[]>(r))
+  getCompatibility(query: CompatibilityQuery): Promise<CompatibilityRow[]> {
+    return configurations.getCompatibility({
+      table: query.table,
+      systemTypeId: query.systemTypeId || null,
+      doorArchitectureId: query.doorArchitectureId || null,
+      panelConfigurationId: query.panelConfigurationId || null,
+      profileSeriesId: query.profileSeriesId || null,
+      finishId: query.finishId || null,
+      glassId: query.glassId || null,
+    }) as unknown as Promise<CompatibilityRow[]>
   },
 }
-
-const ADMIN_BASE = `${BASE}/admin`
 
 export const adminApi = {
-  getTables() {
-    return fetch(`${ADMIN_BASE}/tables`).then((r) => json<string[]>(r))
+  getTables(): Promise<string[]> {
+    return admin.getTables()
   },
-  getSchema(table: string) {
-    return fetch(`${ADMIN_BASE}/${table}/schema`).then((r) => json<AdminColumn[]>(r))
+  getSchema(table: string): Promise<AdminColumn[]> {
+    return admin.getSchema(table)
   },
-  getRows(table: string) {
-    return fetch(`${ADMIN_BASE}/${table}`).then((r) => json<AdminRow[]>(r))
+  getRows(table: string): Promise<AdminRow[]> {
+    return admin.getRows(table) as unknown as Promise<AdminRow[]>
   },
-  createRow(table: string, data: AdminRow) {
-    return fetch(`${ADMIN_BASE}/${table}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }).then((r) => json<AdminRow>(r))
+  createRow(table: string, data: AdminRow): Promise<AdminRow> {
+    return admin.createRow(table, data) as unknown as Promise<AdminRow>
   },
-  updateRow(table: string, id: number, data: AdminRow) {
-    return fetch(`${ADMIN_BASE}/${table}/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }).then((r) => json<AdminRow>(r))
+  updateRow(table: string, id: number, data: AdminRow): Promise<AdminRow> {
+    return admin.updateRow(table, id, data) as unknown as Promise<AdminRow>
   },
-  deleteRow(table: string, id: number) {
-    return fetch(`${ADMIN_BASE}/${table}/${id}`, { method: 'DELETE' }).then((r) => {
-      if (!r.ok) throw new Error(`Delete failed: ${r.status}`)
-    })
+  async deleteRow(table: string, id: number): Promise<void> {
+    await admin.deleteRow(table, id)
   },
 }
