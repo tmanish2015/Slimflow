@@ -1,13 +1,4 @@
-// No .env file exists on Vercel (env vars come from its dashboard directly
-// into process.env) — only load one for local dev, where it does exist.
-if (!process.env.VERCEL) {
-  try {
-    process.loadEnvFile()
-  } catch {
-    // No backend/.env yet locally either — fall through with whatever's
-    // already in process.env (matches the pre-existing local-dev behavior).
-  }
-}
+import './loadEnv.js'
 
 import express, { type ErrorRequestHandler } from 'express'
 import cors from 'cors'

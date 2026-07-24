@@ -1,6 +1,5 @@
 import { Router } from 'express'
 import multer from 'multer'
-import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import {
@@ -18,7 +17,7 @@ import { generateBom, firstValueMm } from '../services/bom.js'
 import { suggestHardware } from '../services/hardware.js'
 import { getRateMaster, saveRateMaster } from '../services/rateMaster.js'
 import { asyncHandler } from '../asyncHandler.js'
-import { downloadFromStorage, uploadToStorage, PROCESSED_BUCKET, UPLOAD_BUCKET } from '../storage.js'
+import { downloadFile, uploadFile } from '../storage.js'
 
 const ACCEPTED_MIME = new Set([
   'application/pdf',
@@ -29,8 +28,8 @@ const ACCEPTED_MIME = new Set([
 ])
 
 // Buffered in memory rather than written to local disk — Vercel's
-// filesystem is ephemeral/read-only, so the upload goes straight to
-// Supabase Storage instead (see storedPath below).
+// filesystem is ephemeral/read-only, so the upload goes straight into
+// Postgres (see storage.ts) instead.
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 },
@@ -54,16 +53,15 @@ drawingsRouter.post('/', upload.single('file'), asyncHandler(async (req, res) =>
     res.status(400).json({ error: 'No file uploaded (field name must be "file")' })
     return
   }
-  // storedPath is now a Supabase Storage object key, not a local path — a
-  // random name (not the original filename) so unsafe characters/slashes in
-  // a user-supplied filename can never affect the storage key.
-  const storageKey = `${randomUUID()}${path.extname(req.file.originalname) || ''}`
+  // storedPath used to be a local disk path; now the file lives in the
+  // drawing_files table keyed by the drawing's own id, so this is just the
+  // original filename for display/reference.
   const record = await createDrawing({
     originalFilename: req.file.originalname,
     mimeType: req.file.mimetype,
-    storedPath: storageKey,
+    storedPath: req.file.originalname,
   })
-  await uploadToStorage(UPLOAD_BUCKET, storageKey, req.file.buffer, req.file.mimetype)
+  await uploadFile(record.id, 'upload', req.file.buffer, req.file.mimetype)
   res.status(201).json(record)
 
   // Process after responding so the client gets an id to poll immediately.
@@ -71,18 +69,20 @@ drawingsRouter.post('/', upload.single('file'), asyncHandler(async (req, res) =>
 }))
 
 // Was an express.static(PROCESSED_DIR) mount in index.ts — the preview PNG
-// now lives in Supabase Storage, so this proxies the download through
-// instead of serving a local file. Stays behind requireAuth same as before
-// (mounted under /processed in index.ts).
+// now lives in Postgres, so this proxies the download through instead of
+// serving a local file. The frontend requests /processed/<drawingId>.png
+// directly, so strip the extension to recover the id. Stays behind
+// requireAuth same as before (mounted under /processed in index.ts).
 export const processedRouter = Router()
 
 processedRouter.get(
   '/:filename',
   asyncHandler(async (req, res) => {
+    const drawingId = req.params.filename.replace(/\.png$/, '')
     try {
-      const buffer = await downloadFromStorage(PROCESSED_BUCKET, req.params.filename)
-      res.setHeader('Content-Type', 'image/png')
-      res.send(buffer)
+      const { data, contentType } = await downloadFile(drawingId, 'preview')
+      res.setHeader('Content-Type', contentType)
+      res.send(data)
     } catch {
       res.status(404).json({ error: 'Preview not found' })
     }
