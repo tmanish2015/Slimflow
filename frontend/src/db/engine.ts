@@ -23,6 +23,20 @@ function schedulePersist() {
   }, 250)
 }
 
+// The 250ms debounce above is fine on a desktop tab that stays alive, but
+// Android can kill the whole app process the moment it's backgrounded —
+// there's no guaranteed final event after that, so a pending debounced
+// write is simply lost (this is the actual cause of "my last change didn't
+// save" on the Android build). `visibilitychange`→hidden and `pagehide`
+// both fire while the process is still alive, right as backgrounding
+// starts, so flushing there is the last reliable point to persist.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') void flushPersist()
+  })
+  window.addEventListener('pagehide', () => void flushPersist())
+}
+
 export async function initDb(): Promise<void> {
   if (dbReady) {
     await dbReady
