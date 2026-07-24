@@ -107,6 +107,7 @@ export interface ConfigurationResult {
   wasteCost: number
   totalCost: number
   sellingPrice: number
+  customerId: number | null
   createdAt: string
   updatedAt: string
 }
@@ -154,6 +155,7 @@ export interface SavedConfiguration {
   waste_cost: number | null
   total_cost: number | null
   selling_price: number | null
+  customer_id: number | null
   created_at: string
   updated_at: string
 }
@@ -168,6 +170,7 @@ export interface CreateConfigurationInput {
   glassId?: number | null
   widthMm: number
   heightMm: number
+  customerId?: number | null
 }
 
 export const configuratorApi = {
@@ -176,6 +179,11 @@ export const configuratorApi = {
   },
   getConfigurations(): Promise<SavedConfiguration[]> {
     return configurations.listConfigurations() as unknown as Promise<SavedConfiguration[]>
+  },
+  getConfiguration(id: string): Promise<SavedConfiguration & { profileLines: ProfileLine[]; bomLines: BomLine[] }> {
+    return configurations.getConfiguration(id) as unknown as Promise<
+      SavedConfiguration & { profileLines: ProfileLine[]; bomLines: BomLine[] }
+    >
   },
   createConfiguration(input: CreateConfigurationInput): Promise<ConfigurationResult> {
     return configurations.createConfiguration(input) as unknown as Promise<ConfigurationResult>

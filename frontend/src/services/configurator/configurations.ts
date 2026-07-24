@@ -100,6 +100,7 @@ export interface CreateConfigurationInput {
   glassId?: number | null
   widthMm: number
   heightMm: number
+  customerId?: number | null
 }
 
 async function buildConfiguration(id: string, input: CreateConfigurationInput): Promise<ConfigurationResult> {
@@ -330,6 +331,7 @@ async function buildConfiguration(id: string, input: CreateConfigurationInput): 
     wasteCost: totals.wasteCost,
     totalCost: totals.totalCost,
     sellingPrice: totals.sellingPrice,
+    customerId: input.customerId ?? null,
     createdAt: now,
     updatedAt: now,
   }
@@ -341,8 +343,8 @@ async function persistConfiguration(result: ConfigurationResult) {
       (id, name, system_type_id, door_architecture_id, panel_configuration_id, profile_series_id, finish_id, glass_id,
        width_mm, height_mm, estimated_door_weight_kg, recommended_track_id, recommended_frame_id, recommended_hinge_id,
        recommended_floor_spring_id, recommended_handle_id, recommended_lock_id, recommended_hardware_set_id,
-       material_cost, waste_cost, total_cost, selling_price, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       material_cost, waste_cost, total_cost, selling_price, customer_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       result.id,
       result.name,
@@ -366,6 +368,7 @@ async function persistConfiguration(result: ConfigurationResult) {
       result.wasteCost,
       result.totalCost,
       result.sellingPrice,
+      result.customerId,
       result.createdAt,
       result.updatedAt,
     ],

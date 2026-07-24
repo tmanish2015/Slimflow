@@ -83,6 +83,7 @@ export interface DrawingRecord {
   hardwareItems: HardwareItem[]
   panelMaterial: PanelMaterial
   bom: Bom | null
+  customerId: number | null
   createdAt: string
   updatedAt: string
 }
@@ -108,6 +109,7 @@ export async function createDrawing(input: { originalFilename: string; mimeType:
     hardwareItems: [],
     panelMaterial: 'glass',
     bom: null,
+    customerId: null,
     createdAt: now,
     updatedAt: now,
   }

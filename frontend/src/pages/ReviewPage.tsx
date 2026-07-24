@@ -18,6 +18,8 @@ import { SelectField } from '~/components/select-field'
 import { DrawingSchematic, type SchematicInput } from '~/components/DrawingSchematic'
 import { toMillimetres } from '~/lib/units'
 import { downloadFile } from '~/services/drawing/storage'
+import { CustomerPicker } from '~/components/customer-picker'
+import type { Customer } from '~/lib/customersApi'
 
 const UNIT_OPTIONS: NonNullable<ExtractedDimension['unit']>[] = ['mm', 'cm', 'in', 'ft']
 const PANEL_MATERIAL_OPTIONS: PanelMaterial[] = ['glass', 'acp', 'wpc']
@@ -113,6 +115,7 @@ export function ReviewPage() {
   const [genError, setGenError] = useState<string | null>(null)
   const [currency, setCurrency] = useState('INR')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [customer, setCustomer] = useState<Customer | null>(null)
 
   const refresh = useCallback(async () => {
     if (!id) return
@@ -277,6 +280,11 @@ export function ReviewPage() {
     setDrawing(updated)
   }
 
+  const changeCustomer = async (nextCustomerId: number | null) => {
+    const updated = await api.setCustomer(id, nextCustomerId)
+    setDrawing(updated)
+  }
+
   const generateBom = async () => {
     setGenError(null)
     await saveDimensions()
@@ -309,6 +317,47 @@ export function ReviewPage() {
           {drawing.status.replace('_', ' ')}
         </Badge>
       </div>
+
+      <Card className="print:hidden">
+        <CardHeader>
+          <CardTitle>Customer (optional)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CustomerPicker customerId={drawing.customerId} onChange={changeCustomer} onCustomerLoaded={setCustomer} />
+        </CardContent>
+      </Card>
+
+      {customer && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Quotation for</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+            <div>
+              <div className="text-xs text-muted-foreground">Customer</div>
+              <div className="font-medium">{customer.name}</div>
+            </div>
+            {customer.phone && (
+              <div>
+                <div className="text-xs text-muted-foreground">Phone</div>
+                <div>{customer.phone}</div>
+              </div>
+            )}
+            {customer.gst_number && (
+              <div>
+                <div className="text-xs text-muted-foreground">GST</div>
+                <div>{customer.gst_number}</div>
+              </div>
+            )}
+            {customer.address && (
+              <div>
+                <div className="text-xs text-muted-foreground">Address</div>
+                <div>{customer.address}</div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {isProcessing && (
         <Card>

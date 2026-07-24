@@ -237,6 +237,19 @@ CREATE TABLE IF NOT EXISTS compatibility_rules (
   active INTEGER NOT NULL DEFAULT 1
 );
 
+-- Reusable customer records, shared across both the configurator and the
+-- drawing-recognition module's quotations — kept as one table (not
+-- duplicated per module) so a repeat customer is searched/picked once,
+-- never retyped.
+CREATE TABLE IF NOT EXISTS customers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL DEFAULT '',
+  gst_number TEXT NOT NULL DEFAULT '',
+  address TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS configurations (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL DEFAULT '',
@@ -260,6 +273,7 @@ CREATE TABLE IF NOT EXISTS configurations (
   waste_cost REAL,
   total_cost REAL,
   selling_price REAL,
+  customer_id INTEGER REFERENCES customers(id),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

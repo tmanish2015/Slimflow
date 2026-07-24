@@ -89,6 +89,10 @@ export const api = {
     return (await store.updateDrawing(id, { panelMaterial })) as unknown as DrawingRecord
   },
 
+  async setCustomer(id: string, customerId: number | null): Promise<DrawingRecord> {
+    return (await store.updateDrawing(id, { customerId })) as unknown as DrawingRecord
+  },
+
   async generateBom(id: string): Promise<DrawingRecord> {
     const drawing = await store.getDrawing(id)
     if (!drawing) throw new Error('Drawing not found')

@@ -212,6 +212,7 @@ export interface ConfigurationResult {
   wasteCost: number
   totalCost: number
   sellingPrice: number
+  customerId: number | null
   createdAt: string
   updatedAt: string
 }

@@ -80,6 +80,7 @@ export interface DrawingRecord {
   hardwareItems: HardwareItem[]
   panelMaterial: PanelMaterial
   bom: Bom | null
+  customerId: number | null
   createdAt: string
   updatedAt: string
 }

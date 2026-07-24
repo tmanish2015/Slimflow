@@ -16,6 +16,8 @@ import { Badge } from '~/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
 import { IdSelect } from '~/components/id-select'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
+import { CustomerPicker } from '~/components/customer-picker'
+import type { Customer } from '~/lib/customersApi'
 
 export function ConfiguratorPage() {
   const [reference, setReference] = useState<ReferenceData | null>(null)
@@ -32,6 +34,8 @@ export function ConfiguratorPage() {
   const [submitting, setSubmitting] = useState(false)
   const [locks, setLocks] = useState<CompatibilityRow[]>([])
   const [handles, setHandles] = useState<CompatibilityRow[]>([])
+  const [customerId, setCustomerId] = useState<number | null>(null)
+  const [customer, setCustomer] = useState<Customer | null>(null)
 
   useEffect(() => {
     configuratorApi.getReference().then(setReference)
@@ -78,6 +82,7 @@ export function ConfiguratorPage() {
         glassId: glassId === '' ? null : glassId,
         widthMm,
         heightMm,
+        customerId,
       })
       setResult(created)
     } catch (err) {
@@ -205,6 +210,15 @@ export function ConfiguratorPage() {
         </Card>
       )}
 
+      <Card className="print:hidden">
+        <CardHeader>
+          <CardTitle>Customer (optional)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CustomerPicker customerId={customerId} onChange={setCustomerId} onCustomerLoaded={setCustomer} />
+        </CardContent>
+      </Card>
+
       <div className="flex items-center gap-3 print:hidden">
         <Button onClick={submit} disabled={!canSubmit || submitting}>
           {submitting ? 'Configuring…' : 'Configure'}
@@ -327,6 +341,38 @@ export function ConfiguratorPage() {
               </Table>
             </CardContent>
           </Card>
+
+          {customer && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Quotation for</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                <div>
+                  <div className="text-xs text-muted-foreground">Customer</div>
+                  <div className="font-medium">{customer.name}</div>
+                </div>
+                {customer.phone && (
+                  <div>
+                    <div className="text-xs text-muted-foreground">Phone</div>
+                    <div>{customer.phone}</div>
+                  </div>
+                )}
+                {customer.gst_number && (
+                  <div>
+                    <div className="text-xs text-muted-foreground">GST</div>
+                    <div>{customer.gst_number}</div>
+                  </div>
+                )}
+                {customer.address && (
+                  <div>
+                    <div className="text-xs text-muted-foreground">Address</div>
+                    <div>{customer.address}</div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

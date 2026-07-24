@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
-import { LogOut, Moon, Sun, Upload, Wrench, LayoutDashboard, Database, Banknote } from 'lucide-react'
+import { LogOut, Moon, Sun, Upload, Wrench, LayoutDashboard, Database, Banknote, Receipt } from 'lucide-react'
 import { UploadPage } from '~/pages/UploadPage'
 import { ReviewPage } from '~/pages/ReviewPage'
 import { RatesPage } from '~/pages/RatesPage'
 import { ConfiguratorPage } from '~/pages/ConfiguratorPage'
+import { ConfigurationDetailPage } from '~/pages/ConfigurationDetailPage'
+import { QuotationsPage } from '~/pages/QuotationsPage'
 import { AdminPage } from '~/pages/AdminPage'
 import { DashboardPage } from '~/pages/DashboardPage'
 import { LoginPage } from '~/pages/LoginPage'
@@ -15,6 +17,7 @@ import { cn } from '~/lib/utils'
 const NAV_ITEMS = [
   { to: '/', label: 'Upload', icon: Upload },
   { to: '/configurator', label: 'Configurator', icon: Wrench },
+  { to: '/quotations', label: 'Quotations', icon: Receipt },
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/admin', label: 'Admin', icon: Database },
   { to: '/rates', label: 'Rate master', icon: Banknote },
@@ -158,6 +161,8 @@ export default function App() {
           <Route path="/drawings/:id" element={<ReviewPage />} />
           <Route path="/rates" element={<RatesPage />} />
           <Route path="/configurator" element={<ConfiguratorPage />} />
+          <Route path="/configurations/:id" element={<ConfigurationDetailPage />} />
+          <Route path="/quotations" element={<QuotationsPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/admin" element={<AdminPage />} />
         </Routes>

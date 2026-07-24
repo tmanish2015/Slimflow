@@ -37,6 +37,20 @@ if (typeof document !== 'undefined') {
   window.addEventListener('pagehide', () => void flushPersist())
 }
 
+// `CREATE TABLE IF NOT EXISTS` in SCHEMA_SQL only creates tables that don't
+// exist yet — it never alters a table that was already created by an older
+// version of the schema. Columns added to an existing table (like
+// `customer_id` on `configurations`) need an explicit ALTER here, or every
+// device that already has a persisted IndexedDB database breaks on the new
+// code with "no such column".
+function runMigrations(instance: Database) {
+  const columns = instance.exec("PRAGMA table_info(configurations)")[0]?.values ?? []
+  const hasCustomerId = columns.some((row) => row[1] === 'customer_id')
+  if (!hasCustomerId) {
+    instance.run('ALTER TABLE configurations ADD COLUMN customer_id INTEGER REFERENCES customers(id)')
+  }
+}
+
 export async function initDb(): Promise<void> {
   if (dbReady) {
     await dbReady
@@ -47,6 +61,7 @@ export async function initDb(): Promise<void> {
     const saved = await get<Uint8Array>(IDB_KEY)
     const instance = saved ? new SQL.Database(saved) : new SQL.Database()
     instance.run(SCHEMA_SQL)
+    runMigrations(instance)
     db = instance
     seedIfEmpty()
     schedulePersist()
