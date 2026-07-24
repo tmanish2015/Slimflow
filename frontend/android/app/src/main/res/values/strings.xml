@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Slimflow</string>
+    <string name="title_activity_main">Slimflow</string>
+    <string name="package_name">com.slimflow.app</string>
+    <string name="custom_url_scheme">com.slimflow.app</string>
+</resources>
