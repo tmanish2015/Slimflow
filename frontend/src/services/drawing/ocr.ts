@@ -11,18 +11,22 @@ export interface OcrWord {
 
 let workerPromise: Promise<Worker> | null = null
 
-// Worker script + wasm core + English trained-data are fetched from
-// tesseract.js's own default CDN (jsdelivr/tessdata.projectnaptha.com) on
-// first use — hand-vendoring these risks a version mismatch between the
-// worker glue and the wasm core's exported ABI (tried it; a mismatched pair
-// hangs silently during `initializing tesseract` instead of throwing).
-// Letting tesseract.js resolve its own matching set is the supported path.
-// `cacheMethod: 'indexedDB'` means only the very first run needs network —
-// every run after that loads the cached core+language data locally, which
-// is the real offline requirement for this app.
+// Worker script + wasm core + trained-data are fetched from tesseract.js's
+// own default CDN (jsdelivr/tessdata.projectnaptha.com) on first use —
+// hand-vendoring these risks a version mismatch between the worker glue and
+// the wasm core's exported ABI (tried it; a mismatched pair hangs silently
+// during `initializing tesseract` instead of throwing). Letting tesseract.js
+// resolve its own matching set is the supported path. `cacheMethod:
+// 'indexedDB'` means only the very first run needs network — every run
+// after that loads the cached core+language data locally.
+//
+// eng+hin so drawings with Devanagari labels (हिन्दी में लिखे नोट्स — common
+// on hand-sketched fabrication notes) recognize both scripts in one pass;
+// dimensionParser's keyword rules match either language's width/height
+// terms once the text comes back.
 async function getWorker(): Promise<Worker> {
   if (!workerPromise) {
-    workerPromise = createWorker('eng', 1, {
+    workerPromise = createWorker('eng+hin', 1, {
       cacheMethod: 'indexedDB',
     })
   }

@@ -15,7 +15,10 @@ interface Line {
   tokens: RawToken[]
 }
 
-const UNIT_RE = /\b(mm|cm|m|in|inch|inches|ft|feet|foot)\b/gi
+// Group 1 = English unit word (needs \b since JS \b only recognizes ASCII
+// word characters); group 2 = Devanagari unit word (no \b — see note by
+// KEYWORD_RULES below on why that would silently never match).
+const UNIT_RE = /\b(mm|cm|m|in|inch|inches|ft|feet|foot)\b|(मिमी|सेमी|मीटर|इंच|फ़ीट|फीट)/gi
 // Fabrication sketches commonly mark inches/feet with prime symbols instead
 // of spelling the unit out (90" = 90 inches, 6' = 6 feet) — a straight or
 // curly quote directly after a number, not a standalone word, so it needs
@@ -61,11 +64,19 @@ function unitFromText(text: string): 'mm' | 'cm' | 'in' | 'ft' | null {
   const candidates: { index: number; unit: 'mm' | 'cm' | 'in' | 'ft' }[] = []
 
   for (const m of text.matchAll(UNIT_RE)) {
-    const u = m[1].toLowerCase()
-    if (u === 'mm') candidates.push({ index: m.index, unit: 'mm' })
-    else if (u === 'cm' || u === 'm') candidates.push({ index: m.index, unit: 'cm' })
-    else if (u === 'in' || u.startsWith('inch')) candidates.push({ index: m.index, unit: 'in' })
-    else if (u === 'ft' || u === 'feet' || u === 'foot') candidates.push({ index: m.index, unit: 'ft' })
+    if (m[1]) {
+      const u = m[1].toLowerCase()
+      if (u === 'mm') candidates.push({ index: m.index, unit: 'mm' })
+      else if (u === 'cm' || u === 'm') candidates.push({ index: m.index, unit: 'cm' })
+      else if (u === 'in' || u.startsWith('inch')) candidates.push({ index: m.index, unit: 'in' })
+      else if (u === 'ft' || u === 'feet' || u === 'foot') candidates.push({ index: m.index, unit: 'ft' })
+    } else if (m[2]) {
+      const u = m[2]
+      if (u === 'मिमी') candidates.push({ index: m.index, unit: 'mm' })
+      else if (u === 'सेमी' || u === 'मीटर') candidates.push({ index: m.index, unit: 'cm' })
+      else if (u === 'इंच') candidates.push({ index: m.index, unit: 'in' })
+      else if (u === 'फ़ीट' || u === 'फीट') candidates.push({ index: m.index, unit: 'ft' })
+    }
   }
   for (const m of text.matchAll(QUOTE_UNIT_RE)) {
     candidates.push({ index: m.index, unit: m[2] ? 'ft' : 'in' })
@@ -116,11 +127,17 @@ function makeDimension(
   }
 }
 
+// Devanagari terms are matched without \b — JS's \b only recognizes ASCII
+// [A-Za-z0-9_] as "word" characters, so a boundary between a space and a
+// Devanagari letter never fires and \b-wrapped Devanagari alternatives would
+// silently never match. Plain substring alternation is safe here: these are
+// distinct multi-character words, not single letters that could collide
+// with unrelated text.
 const KEYWORD_RULES: { kind: DimensionKind; label: string; re: RegExp }[] = [
-  { kind: 'width', label: 'Overall Width', re: /\b(overall\s*width|o\/w|width|wd)\b/i },
-  { kind: 'height', label: 'Overall Height', re: /\b(overall\s*height|o\/h|height|ht)\b/i },
-  { kind: 'glass_thickness', label: 'Glass Thickness', re: /\bglass\b/i },
-  { kind: 'mullion_count', label: 'Mullions', re: /\bmullion/i },
+  { kind: 'width', label: 'Overall Width', re: /\b(overall\s*width|o\/w|width|wd)\b|चौड़ाई/i },
+  { kind: 'height', label: 'Overall Height', re: /\b(overall\s*height|o\/h|height|ht)\b|ऊंचाई|ऊँचाई|लंबाई/i },
+  { kind: 'glass_thickness', label: 'Glass Thickness', re: /\bglass\b|कांच|शीशा/i },
+  { kind: 'mullion_count', label: 'Mullions', re: /\bmullion|मलियन/i },
   { kind: 'transom_count', label: 'Transoms', re: /\btransom/i },
 ]
 
