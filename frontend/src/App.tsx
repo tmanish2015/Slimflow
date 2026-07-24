@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
-import { LogOut, Moon, Sun } from 'lucide-react'
+import { LogOut, Moon, Sun, Upload, Wrench, LayoutDashboard, Database, Banknote } from 'lucide-react'
 import { UploadPage } from '~/pages/UploadPage'
 import { ReviewPage } from '~/pages/ReviewPage'
 import { RatesPage } from '~/pages/RatesPage'
@@ -13,15 +13,37 @@ import { authApi } from '~/lib/authApi'
 import { cn } from '~/lib/utils'
 
 const NAV_ITEMS = [
-  { to: '/configurator', label: 'Configurator' },
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/admin', label: 'Admin' },
-  { to: '/rates', label: 'Rate master' },
+  { to: '/', label: 'Upload', icon: Upload },
+  { to: '/configurator', label: 'Configurator', icon: Wrench },
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/admin', label: 'Admin', icon: Database },
+  { to: '/rates', label: 'Rate master', icon: Banknote },
 ]
+
+/** Three tilted bars in a rising arrangement — same mark used for the
+ * Android app icon/splash and the favicon, so the in-app header matches
+ * what shows on the home screen. */
+function Logo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 1024 1024" className={className} aria-hidden="true">
+      <rect width="1024" height="1024" rx="220" fill="#fff" />
+      <g transform="translate(512,560) scale(1.55)">
+        <path d="M -220,-40 L -90,-40 L -130,140 L -260,140 Z" fill="#f2a93b" />
+        <path d="M -94,-200 L 56,-200 L 10,140 L -140,140 Z" fill="#0f2a4d" />
+        <path d="M 52,-110 L 192,-110 L 150,140 L 10,140 Z" fill="#2a78d6" />
+      </g>
+    </svg>
+  )
+}
+
+function isActive(pathname: string, to: string) {
+  if (to === '/') return pathname === '/' || pathname.startsWith('/drawings/')
+  return pathname.startsWith(to)
+}
 
 function NavLink({ to, label }: { to: string; label: string }) {
   const location = useLocation()
-  const active = location.pathname === to || (to !== '/' && location.pathname.startsWith(to))
+  const active = isActive(location.pathname, to)
   return (
     <Link
       to={to}
@@ -32,6 +54,35 @@ function NavLink({ to, label }: { to: string; label: string }) {
     >
       {label}
     </Link>
+  )
+}
+
+/** Bottom tab bar, mobile only — a top link row doesn't read as a native
+ * mobile app and cramps badly at phone width; a fixed bottom bar with
+ * icon+label per section is the standard mobile pattern (and what the
+ * Android-wrapped build should feel like, not a website squeezed onto a
+ * phone). Hidden from `sm` up, where the header nav takes over. */
+function BottomNav() {
+  const location = useLocation()
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t bg-card sm:hidden print:hidden">
+      {NAV_ITEMS.map(({ to, label, icon: Icon }) => {
+        const active = isActive(location.pathname, to)
+        return (
+          <Link
+            key={to}
+            to={to}
+            className={cn(
+              'flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] transition-colors',
+              active ? 'text-primary' : 'text-muted-foreground',
+            )}
+          >
+            <Icon className="size-5" strokeWidth={active ? 2.25 : 1.75} />
+            {label}
+          </Link>
+        )
+      })}
+    </nav>
   )
 }
 
@@ -86,26 +137,32 @@ export default function App() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b bg-card print:hidden">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
-          <Link to="/" className="shrink-0 text-sm font-semibold tracking-tight">
+          <Link to="/" className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight">
+            <Logo className="size-6 rounded-md" />
             Slimflow
           </Link>
           <nav className="flex flex-wrap items-center gap-3 sm:gap-6">
-            {NAV_ITEMS.map((item) => (
-              <NavLink key={item.to} {...item} />
-            ))}
+            <div className="hidden items-center gap-6 sm:flex">
+              {NAV_ITEMS.filter((item) => item.to !== '/').map((item) => (
+                <NavLink key={item.to} {...item} />
+              ))}
+            </div>
             <ThemeToggle />
             <LogoutButton onLoggedOut={() => setAuthenticated(false)} />
           </nav>
         </div>
       </header>
-      <Routes>
-        <Route path="/" element={<UploadPage />} />
-        <Route path="/drawings/:id" element={<ReviewPage />} />
-        <Route path="/rates" element={<RatesPage />} />
-        <Route path="/configurator" element={<ConfiguratorPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/admin" element={<AdminPage />} />
-      </Routes>
+      <div className="pb-16 sm:pb-0">
+        <Routes>
+          <Route path="/" element={<UploadPage />} />
+          <Route path="/drawings/:id" element={<ReviewPage />} />
+          <Route path="/rates" element={<RatesPage />} />
+          <Route path="/configurator" element={<ConfiguratorPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/admin" element={<AdminPage />} />
+        </Routes>
+      </div>
+      <BottomNav />
     </div>
   )
 }
