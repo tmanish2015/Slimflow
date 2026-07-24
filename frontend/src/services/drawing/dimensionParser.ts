@@ -16,6 +16,11 @@ interface Line {
 }
 
 const UNIT_RE = /\b(mm|cm|m|in|inch|inches|ft|feet|foot)\b/gi
+// Fabrication sketches commonly mark inches/feet with prime symbols instead
+// of spelling the unit out (90" = 90 inches, 6' = 6 feet) — a straight or
+// curly quote directly after a number, not a standalone word, so it needs
+// its own check rather than folding into UNIT_RE's word-boundary matching.
+const QUOTE_UNIT_RE = /(\d)\s*(['’])(?!')|(\d)\s*(["”])/g
 const PLAIN_NUMBER_RE = /(\d[\d,]{0,6})(?:\.\d+)?/g
 const FRAME_XY_RE = /(\d{1,4})\s*[xX×]\s*(\d{1,4})/
 const RATIO_RE = /\b(\d{1,3})\s*:\s*(\d{1,4})\b/
@@ -49,14 +54,26 @@ function groupIntoLines(tokens: RawToken[]): Line[] {
 }
 
 function unitFromText(text: string): 'mm' | 'cm' | 'in' | 'ft' | null {
-  const matches = [...text.matchAll(UNIT_RE)]
-  if (matches.length === 0) return null
-  const u = matches[matches.length - 1][1].toLowerCase()
-  if (u === 'mm') return 'mm'
-  if (u === 'cm' || u === 'm') return 'cm'
-  if (u === 'in' || u.startsWith('inch')) return 'in'
-  if (u === 'ft' || u === 'feet' || u === 'foot') return 'ft'
-  return null
+  // Word-based ("90 mm") and prime-symbol ("90"") units can both appear —
+  // whichever comes last in the line wins, same convention as before for
+  // the word-only case (the real unit label almost always trails the
+  // number it belongs to).
+  const candidates: { index: number; unit: 'mm' | 'cm' | 'in' | 'ft' }[] = []
+
+  for (const m of text.matchAll(UNIT_RE)) {
+    const u = m[1].toLowerCase()
+    if (u === 'mm') candidates.push({ index: m.index, unit: 'mm' })
+    else if (u === 'cm' || u === 'm') candidates.push({ index: m.index, unit: 'cm' })
+    else if (u === 'in' || u.startsWith('inch')) candidates.push({ index: m.index, unit: 'in' })
+    else if (u === 'ft' || u === 'feet' || u === 'foot') candidates.push({ index: m.index, unit: 'ft' })
+  }
+  for (const m of text.matchAll(QUOTE_UNIT_RE)) {
+    candidates.push({ index: m.index, unit: m[2] ? 'ft' : 'in' })
+  }
+
+  if (candidates.length === 0) return null
+  candidates.sort((a, b) => a.index - b.index)
+  return candidates[candidates.length - 1].unit
 }
 
 export function toMillimetres(value: number, unit: 'mm' | 'cm' | 'in' | 'ft' | null): number {
